@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Guard v2 for the routine capability probe (Test B: one native Design canvas).
+# Guard v3 for the routine capability probe (Test B: one native Design canvas).
 #
 # PreToolUse (every tool) allows only:
 #   - ToolSearch, Read
@@ -19,7 +19,7 @@ import os
 import re
 import sys
 
-MARKER = 'ROUTINE-PROBE-GUARD-v2'
+MARKER = 'ROUTINE-PROBE-GUARD-v3'
 DESIGN_TYPE = 'https://claude.ai/artifact/QKN21svewxgyPb6SYRqWnd'
 STATE = '/tmp/routine-probe-guard-state.json'
 MAX_FILLS = 6
@@ -53,6 +53,18 @@ def in_scratchpad(path):
     if real.startswith('/private/tmp/'):  # macOS /tmp, so local tests match the Linux VM
         real = real[len('/private'):]
     return real.startswith('/tmp/claude-') and '/scratchpad/' in real + '/'
+
+
+def created_in_transcript(path):
+    """The first artifact URL a 'Created a new Artifact at …' tool result names, other than the type itself."""
+    try:
+        with open(path, errors='replace') as f:
+            for m in CREATED.finditer(f.read()):
+                if m.group(1) != DESIGN_TYPE:
+                    return m.group(1)
+    except Exception:
+        pass
+    return None
 
 
 try:
@@ -101,7 +113,13 @@ if tool == 'Artifact':
         state['create_attempted'] = True
         save(state)
         sys.exit(0)
-    # A fill: a publish to the artifact the one create returned.
+    # A fill: a publish to the artifact the one create returned. In Test B's cloud run the PostToolUse hook did not
+    # record it, so fall back to the create's result text in the session transcript.
+    if state.get('create_attempted') and not state.get('created_url'):
+        found = created_in_transcript(ev.get('transcript_path'))
+        if found:
+            state['created_url'] = found
+            save(state)
     if not state.get('created_url'):
         block('publish before the Design canvas was created')
     if inp.get('url') != state['created_url']:
