@@ -4,6 +4,26 @@ Private test repository for Claude Code cloud routine probes of native Claude De
 no product code or data, only the guard that is active from session start (it sits on the default branch) and the
 inputs a probe run reads.
 
+## Linear design bridge (V1, being wired)
+
+Linear ticket assigned to `claude` → `bridge/bridge.py` (GitHub Actions schedule, every 10 min, from `main`) fires the
+Linear design routine through its API trigger → the routine (prompt `prompts/linear-design.md`, Guard v5 unchanged)
+designs one canvas and runs `tools/report_result.py`, which pushes the completion contract
+(`wemod-design-result/v1`: ticket, run key, status, canvas URL from the guard's record, summary, limitations) as the
+only commit on `claude/design-result-<run_key>` → the next tick validates it and posts ONE comment on that ticket
+from the `claude` Linear user, mentioning the reviewer.
+
+- Allowlist and reviewer: `bridge/config.json` (`allowed_tickets` empty = the bridge does nothing).
+- One run per brief version: claim tag `design-claim/<ticket>-<sha256(title+description)[:16]>` created before the
+  fire; `design-fired/<run_key>` holds the session id. Edit the brief to retry.
+- Comments are deduped by the footer marker `design-run:<run_key> · result|timeout|fire-failed`. No result within
+  `result_timeout_minutes` → one "didn't finish" comment; a fire error → one "couldn't start" comment.
+- Only Linear mutation: `commentCreate`, only on allowlisted tickets. Off unless repo variable
+  `LINEAR_DESIGN_BRIDGE_ENABLED=true`; `workflow_dispatch` is a dry run.
+- Secrets: `LINEAR_API_KEY` (claude@wand.com, Read + Create comments, Product team), `ROUTINE_FIRE_URL`,
+  `ROUTINE_FIRE_TOKEN` (the routine's API trigger).
+- Tests: `python3 -I tests/bridge_test.py`
+
 ## Current: Guard v5 (Test D, prepared, not run)
 
 - `.claude/hooks/design_guard.py`: a PreToolUse hook on every tool (subagents included) plus a PostToolUse hook on

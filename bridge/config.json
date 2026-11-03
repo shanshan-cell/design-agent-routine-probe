@@ -1,0 +1,8 @@
+{
+  "linear_workspace": "wemod",
+  "allowed_tickets": [],
+  "delegate_user": { "id": "d3ff2737-0bdc-41a7-855b-3168295c4823", "email": "claude@wand.com" },
+  "reviewer": { "id": "58a0b37f-c20b-4705-b20a-c041a482a3cb", "name": "Shanshan", "profile_url": "https://linear.app/wemod/profiles/shanshan" },
+  "result_timeout_minutes": 120,
+  "result_branch_prefix": "claude/design-result-"
+}

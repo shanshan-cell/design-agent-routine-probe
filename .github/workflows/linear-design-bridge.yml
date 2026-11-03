@@ -1,0 +1,38 @@
+name: Linear design bridge
+
+# One tick of bridge/bridge.py: post results the routine pushed back, report runs that never came back, and fire the
+# routine for allowlisted tickets newly assigned to the claude user. Scheduled workflows always run the default
+# branch's code, so a result branch can never change what runs here.
+# OFF unless the repo variable LINEAR_DESIGN_BRIDGE_ENABLED is 'true' (the job is skipped, no runner starts).
+# workflow_dispatch is a dry run only: it reads Linear and GitHub and prints what it would do, writing nothing.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: linear-design-bridge
+  cancel-in-progress: false
+
+permissions:
+  contents: write # claim tags design-claim/* and design-fired/*; nothing else is written to the repository
+
+jobs:
+  tick:
+    if: vars.LINEAR_DESIGN_BRIDGE_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Bridge tick
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          ROUTINE_FIRE_URL: ${{ secrets.ROUTINE_FIRE_URL }}
+          ROUTINE_FIRE_TOKEN: ${{ secrets.ROUTINE_FIRE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}
+        run: python3 -I bridge/bridge.py tick $DRY
