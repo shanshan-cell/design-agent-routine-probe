@@ -270,6 +270,10 @@ push_result(w, k, ready_doc(k))
 tick(w, c)
 check('a late result still posts after a timeout', len(w.comments) == 2 and '· result' in w.comments[1][1])
 
+# --- auth header: personal key bare, OAuth app token as Bearer ---
+check('personal key sent bare', bridge.Linear('lin_api_abc', True).key == 'lin_api_abc')
+check('OAuth app token sent as Bearer', bridge.Linear('oauth-token-abc', True).key == 'Bearer oauth-token-abc')
+
 # --- the comment refuses off-allowlist tickets even if called directly ---
 w = World()
 bridge.http = w.http

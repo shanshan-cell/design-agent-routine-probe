@@ -6,7 +6,7 @@
 #
 #   python3 -I bridge/bridge.py tick [--dry-run]
 #
-# Env: LINEAR_API_KEY (claude@wand.com; Read + Create comments, Product team only), ROUTINE_FIRE_URL,
+# Env: LINEAR_API_KEY (Linear OAuth app token, client credentials, scopes read + comments:create), ROUTINE_FIRE_URL,
 # ROUTINE_FIRE_TOKEN, GH_TOKEN (the workflow's GITHUB_TOKEN: contents write for claim tags), GITHUB_REPOSITORY.
 # Secrets are only ever sent as headers; nothing here prints a header, a token or a response body.
 #
@@ -211,7 +211,9 @@ def http(method, url, headers, body=None, timeout=30):
 
 class Linear:
     def __init__(self, key, dry):
-        self.key, self.dry = key, dry
+        # A personal key (lin_api_…) is sent bare; an OAuth app token (client credentials, actor app) as Bearer.
+        self.key = key if key.startswith('lin_api_') else f'Bearer {key}'
+        self.dry = dry
 
     def _call(self, doc, variables):
         status, body = http('POST', LINEAR_URL, {'Authorization': self.key}, {'query': doc, 'variables': variables})

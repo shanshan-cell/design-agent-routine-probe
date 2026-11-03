@@ -11,7 +11,7 @@ Linear design routine through its API trigger → the routine (prompt `prompts/l
 designs one canvas and runs `tools/report_result.py`, which pushes the completion contract
 (`wemod-design-result/v1`: ticket, run key, status, canvas URL from the guard's record, summary, limitations) as the
 only commit on `claude/design-result-<run_key>` → the next tick validates it and posts ONE comment on that ticket
-from the `claude` Linear user, mentioning the reviewer.
+as the bridge's Linear OAuth app, mentioning the reviewer.
 
 - Allowlist and reviewer: `bridge/config.json` (`allowed_tickets` empty = the bridge does nothing).
 - One run per brief version: claim tag `design-claim/<ticket>-<sha256(title+description)[:16]>` created before the
@@ -20,7 +20,8 @@ from the `claude` Linear user, mentioning the reviewer.
   `result_timeout_minutes` → one "didn't finish" comment; a fire error → one "couldn't start" comment.
 - Only Linear mutation: `commentCreate`, only on allowlisted tickets. Off unless repo variable
   `LINEAR_DESIGN_BRIDGE_ENABLED=true`; `workflow_dispatch` is a dry run.
-- Secrets: `LINEAR_API_KEY` (claude@wand.com, Read + Create comments, Product team), `ROUTINE_FIRE_URL`,
+- Secrets: `LINEAR_API_KEY` (Linear OAuth app token from the client-credentials grant, scopes `read,comments:create`;
+  valid 30 days), `ROUTINE_FIRE_URL`,
   `ROUTINE_FIRE_TOKEN` (the routine's API trigger).
 - Tests: `python3 -I tests/bridge_test.py`
 
