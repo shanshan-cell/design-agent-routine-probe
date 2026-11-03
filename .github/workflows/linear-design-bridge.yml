@@ -8,7 +8,7 @@ name: Linear design bridge
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/10 * * * *' # every 10 min; GitHub runs it as the last committer of this line, who must be a linked user
   workflow_dispatch:
 
 concurrency:
