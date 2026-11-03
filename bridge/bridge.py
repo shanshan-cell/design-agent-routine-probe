@@ -2,7 +2,7 @@
 # Linear -> Claude Code routine -> Linear bridge (V1). Runs from main on a GitHub Actions schedule; one tick does:
 #   1. collect: results the routine pushed to claude/design-result-<run_key> -> ONE comment on that run's ticket
 #   2. sweep:   runs that never reported back within result_timeout_minutes -> ONE "didn't finish" comment
-#   3. poll:    allowlisted tickets newly assigned to the claude user -> claim the brief version, fire the routine
+#   3. poll:    allowlisted tickets carrying the ai-design label -> claim the brief version, fire the routine
 #
 #   python3 -I bridge/bridge.py tick [--dry-run]
 #
@@ -45,7 +45,7 @@ ISSUE_QUERY = '''query DesignBridgeIssue($id: String!) {
   issue(id: $id) {
     id identifier title description url
     state { type }
-    assignee { id }
+    labels(first: 50) { nodes { id name } }
     creator { id name }
     comments(first: 100) { nodes { id body user { id } } }
   }
@@ -87,11 +87,12 @@ def has_marker(comments, key, kinds):
 
 
 def eligible(issue, cfg):
-    """(True, '') when the ticket is delegated to the claude user and has a brief; else (False, why)."""
+    """(True, '') when the ticket carries the trigger label (ai-design, by id) and has a brief; else (False, why)."""
     if issue['identifier'] not in cfg['allowed_tickets']:
         return False, 'not on the allowlist'
-    if (issue.get('assignee') or {}).get('id') != cfg['delegate_user']['id']:
-        return False, 'not assigned to claude'
+    label = cfg['trigger_label']
+    if label['id'] not in {l['id'] for l in (issue.get('labels') or {}).get('nodes', [])}:
+        return False, f'no {label["name"]} label'
     if (issue.get('state') or {}).get('type') in ('completed', 'canceled'):
         return False, 'ticket is closed'
     if len((issue.get('description') or '').strip()) < 40:

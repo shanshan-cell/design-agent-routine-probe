@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(ROOT, 'bridge'))
 import bridge  # noqa: E402
 
 CLAUDE = 'd3ff2737-0bdc-41a7-855b-3168295c4823'
+AI_DESIGN = {'id': '56a3977a-dd58-4cec-a0aa-9522df1f27fb', 'name': 'ai-design'}
 T = 'WAND-9001'
 OTHER = 'WAND-9002'
 FIRE_URL = 'https://api.anthropic.com/v1/claude_code/routines/trig_01TestTestTest/fire'
@@ -49,9 +50,9 @@ class World:
         self.issues = {
             T: {'id': 'uuid-1', 'identifier': T, 'title': 'RDR2 Unlimited Health page', 'description': BRIEF,
                 'url': f'https://linear.app/wemod/issue/{T}', 'state': {'type': 'unstarted'},
-                'assignee': {'id': CLAUDE}, 'creator': {'id': 'u2', 'name': 'A PM'}, 'comments': {'nodes': []}},
+                'labels': {'nodes': [AI_DESIGN]}, 'creator': {'id': 'u2', 'name': 'A PM'}, 'comments': {'nodes': []}},
             OTHER: {'id': 'uuid-2', 'identifier': OTHER, 'title': 'Other', 'description': BRIEF,
-                    'url': 'x', 'state': {'type': 'unstarted'}, 'assignee': {'id': CLAUDE}, 'creator': None,
+                    'url': 'x', 'state': {'type': 'unstarted'}, 'labels': {'nodes': [AI_DESIGN]}, 'creator': None,
                     'comments': {'nodes': []}},
         }
         self.read = []          # Linear issue reads (identifiers)
@@ -149,10 +150,12 @@ c = cfg()
 # --- eligibility and fingerprints ---
 w = World()
 i = w.issues[T]
-check('eligible when assigned to claude', bridge.eligible(i, c) == (True, ''))
+check('eligible with the ai-design label', bridge.eligible(i, c) == (True, ''))
 check('not eligible off the allowlist', not bridge.eligible(w.issues[OTHER], c)[0])
-check('not eligible when assigned to someone else', not bridge.eligible({**i, 'assignee': {'id': 'x'}}, c)[0])
-check('not eligible unassigned', not bridge.eligible({**i, 'assignee': None}, c)[0])
+check('not eligible without labels', not bridge.eligible({**i, 'labels': {'nodes': []}}, c)[0])
+check('not eligible with a same-named label from another team', not bridge.eligible({**i, 'labels': {'nodes': [{'id': 'other', 'name': 'ai-design'}]}}, c)[0])
+check('not eligible with the Data team label', not bridge.eligible({**i, 'labels': {'nodes': [{'id': 'x', 'name': 'claude-analysis'}]}}, c)[0])
+check('assignment alone does not trigger', not bridge.eligible({**i, 'labels': {'nodes': []}, 'assignee': {'id': CLAUDE}}, c)[0])
 check('not eligible when closed', not bridge.eligible({**i, 'state': {'type': 'completed'}}, c)[0])
 check('not eligible without a brief', not bridge.eligible({**i, 'description': 'tbd'}, c)[0])
 check('fingerprint is stable', bridge.fingerprint('a', 'b') == bridge.fingerprint('a', 'b'))
@@ -187,9 +190,9 @@ tick(w, c)
 check('failed fire is not retried for the same brief', len(w.fires) == 1 and len(w.comments) == 1)
 
 w = World()
-w.issues[T]['assignee'] = None
+w.issues[T]['labels'] = {'nodes': []}
 tick(w, c)
-check('unassigned ticket: no fire', w.fires == [])
+check('ticket without ai-design: no fire', w.fires == [])
 
 w = World()
 tick(w, c, dry=True)

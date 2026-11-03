@@ -1,7 +1,7 @@
 name: Linear design bridge
 
 # One tick of bridge/bridge.py: post results the routine pushed back, report runs that never came back, and fire the
-# routine for allowlisted tickets newly assigned to the claude user. Scheduled workflows always run the default
+# routine for allowlisted tickets that carry the ai-design label (Product team). Scheduled workflows always run the default
 # branch's code, so a result branch can never change what runs here.
 # OFF unless the repo variable LINEAR_DESIGN_BRIDGE_ENABLED is 'true' (the job is skipped, no runner starts).
 # workflow_dispatch is a dry run only: it reads Linear and GitHub and prints what it would do, writing nothing.

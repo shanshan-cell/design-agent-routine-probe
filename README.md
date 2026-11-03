@@ -6,7 +6,7 @@ inputs a probe run reads.
 
 ## Linear design bridge (V1, being wired)
 
-Linear ticket assigned to `claude` → `bridge/bridge.py` (GitHub Actions schedule, every 10 min, from `main`) fires the
+Allowlisted Linear ticket labelled `ai-design` (Product team label, the design-agent-poc trigger) → `bridge/bridge.py` (GitHub Actions schedule, every 10 min, from `main`) fires the
 Linear design routine through its API trigger → the routine (prompt `prompts/linear-design.md`, Guard v5 unchanged)
 designs one canvas and runs `tools/report_result.py`, which pushes the completion contract
 (`wemod-design-result/v1`: ticket, run key, status, canvas URL from the guard's record, summary, limitations) as the
