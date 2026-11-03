@@ -3,7 +3,7 @@ name: Linear design bridge
 # One tick of bridge/bridge.py: post results the routine pushed back, report runs that never came back, and fire the
 # routine for allowlisted tickets that carry the ai-design label (Product team). Scheduled workflows always run the default
 # branch's code, so a result branch can never change what runs here.
-# OFF unless the repo variable LINEAR_DESIGN_BRIDGE_ENABLED is 'true' (the job is skipped, no runner starts).
+# The schedule is OFF unless the repo variable LINEAR_DESIGN_BRIDGE_ENABLED is 'true' (the job is skipped).
 # workflow_dispatch is a dry run only: it reads Linear and GitHub and prints what it would do, writing nothing.
 
 on:
@@ -20,7 +20,8 @@ permissions:
 
 jobs:
   tick:
-    if: vars.LINEAR_DESIGN_BRIDGE_ENABLED == 'true'
+    # The schedule needs the switch; a manual dispatch is always a dry run, so it may run before the switch is on.
+    if: vars.LINEAR_DESIGN_BRIDGE_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
