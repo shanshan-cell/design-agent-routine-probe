@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/read_only_guard.py\"" }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": ["Bash", "Write", "Edit", "NotebookEdit", "WebFetch", "WebSearch", "Agent", "Task", "DesignSync", "ArtifactComments", "ArtifactData", "mcp__*"]
+  }
+}
