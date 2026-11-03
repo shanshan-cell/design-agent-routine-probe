@@ -10,7 +10,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Artifact",
+        "matcher": "Artifact|Agent|Task",
         "hooks": [
           { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/design_guard.py\" --post" }
         ]

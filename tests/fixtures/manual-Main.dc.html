@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RDR2 Unlimited Health Mod — 1440 Windows</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/wemodweb/components/bundle.css">
+<script src="ds/wemodweb/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0D0F12}
+a{color:#ffffff}a:hover{color:#ffffff}
+.wmh-backdrop--hero .wmh-backdrop-art{background-image:url(/_blob/aae81e7d88bcaeea5cd829b3970eaa49)}
+/* Page layout only (own wrappers). PROV-MOD-01…05 are provisional patterns built from V0 tokens; type values follow the V0 scale (13 Type) because V0 has no type tokens as CSS variables. */
+.mx-page{font-family:var(--font-sans);color:var(--text-primary);overflow-x:hidden;min-height:100vh}
+.mx-hero{padding:200px 0 120px}
+.mx-sec{margin:0 0 var(--home-section-gap)}
+.mx-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.mx-qualifier{margin:16px 0 0;color:var(--text-secondary);font-size:14px;line-height:20px;font-weight:500;text-align:center}
+.mx-change{position:relative;z-index:1;width:100%;overflow:hidden;margin:0 0 var(--home-section-gap)}
+.mx-change-grid{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:400px minmax(0,1fr);column-gap:80px;align-items:center}
+.mx-change-text{padding:0}
+.mx-frame-col{width:960px}
+.mx-caption{margin:16px 0 0 10px;color:var(--text-secondary);font-size:14px;line-height:20px;font-weight:500}
+.mx-steps{display:flex;flex-direction:column;gap:var(--home-tile-gap);width:100%}
+.mx-fit-row{display:flex;width:100%;margin-top:var(--home-tile-gap)}
+.mx-fit-spacer{width:30%;flex-shrink:0}
+.mx-fact{flex:1;min-width:0;padding:var(--home-tile-pad) 24px;border-radius:var(--radius-tile);background:var(--home-surface);-webkit-backdrop-filter:blur(var(--blur-surface));backdrop-filter:blur(var(--blur-surface));color:var(--home-text-body);font-size:14px;line-height:20px;font-weight:500;text-align:left}
+.mx-fact h3{margin:0 0 12px;color:var(--text-primary);font-size:18px;line-height:24px;font-style:italic;font-weight:800;letter-spacing:-0.75px}
+.mx-stores{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 24px}
+.mx-stores li{display:flex;align-items:center;gap:8px;color:var(--text-primary);font-size:16px;line-height:24px;font-weight:600}
+.mx-stores img{width:16px;height:16px;display:block}
+.mx-gap{margin:12px 0 0;color:var(--text-secondary)}
+.mx-trainer{width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--home-tile-gap);align-items:start}
+.mx-group{padding:var(--home-tile-pad);border-radius:var(--radius-tile);background:var(--home-surface);text-align:left}
+.mx-group-head{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:4px 12px 4px 4px;color:var(--text-primary);font-size:16px;line-height:24px;font-weight:700}
+.mx-group-head img{width:20px;height:20px;display:block}
+.mx-mods{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.mx-mods li{padding:8px 12px;border-radius:var(--radius-capsule);color:var(--home-text-body);font-size:16px;line-height:24px;font-weight:500}
+.mx-mods li.is-this{background:var(--category-player-row);color:var(--text-primary);font-weight:700}
+.mx-credit{margin:0;padding:48px 20px 0;text-align:center;color:var(--text-secondary);font-size:14px;line-height:20px;font-weight:500}
+@container wm-viewport (max-width: 720px){
+  .mx-hero{padding:120px 0 48px}
+  .mx-sec,.mx-change{margin-bottom:var(--home-section-gap-narrow)}
+  .mx-change-grid{display:block;padding:0 20px}
+  .mx-crop{height:178px;overflow:hidden;margin:24px -20px 0}
+  .mx-frame-col{margin:-94px 0 0 -4px}
+  .mx-caption{margin:12px 0 0;text-align:center}
+  .mx-fit-row{display:block}
+  .mx-fit-spacer{display:none}
+  .mx-fact{text-align:center}
+  .mx-stores{justify-content:center}
+  .mx-trainer{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .mx-group{padding:12px 8px}
+  .mx-mods li{padding:8px}
+}
+</style>
+</helmet>
+<div class="wm-viewport wm-home mx-page">
+<x-import component-from-global-scope="WeModWeb.IllustrationBackdrop" kind="hero" src="/_blob/aae81e7d88bcaeea5cd829b3970eaa49">
+<x-import component-from-global-scope="WeModWeb.HomeHeader" logo-src="/_blob/0c61534f12ea1290e6a0121073a807d2"></x-import>
+<div class="mx-hero">
+<x-import component-from-global-scope="WeModWeb.HomeSection" id="top">
+<x-import component-from-global-scope="WeModWeb.SectionHeading" level="{{one}}" align="center" title="Red Dead Redemption 2 Unlimited Health Mod" message="Keep your health full in story mode."></x-import>
+<div class="mx-actions">
+<sc-if value="{{isWindows}}" hint-placeholder-val="{{isWindows}}">
+<x-import component-from-global-scope="WeModWeb.HomeButton" variant="primary" icon="download" label="Download for Windows" href="https://www.wemod.com/download" download="{{yes}}"></x-import>
+</sc-if>
+<x-import component-from-global-scope="WeModWeb.HomeButton" variant="secondary" label="How It Works" href="#how"></x-import>
+</div>
+<p class="mx-qualifier">Free Windows app · Story mode only</p>
+</x-import>
+</div>
+</x-import>
+
+<section class="mx-change" id="what-changes" aria-labelledby="what-changes-h">
+<div class="mx-change-grid">
+<div class="mx-change-text">
+<x-import component-from-global-scope="WeModWeb.SectionHeading" align="left" title="One Thing Changes" message="Unlimited Health changes one thing clearly: damage no longer drains your health bar. That means fewer interruptions during fights, missions, and exploration."></x-import>
+</div>
+<div class="mx-crop">
+<div class="mx-frame-col">
+<x-import component-from-global-scope="WeModWeb.ScreenshotFrame" src="/_blob/a125609c728a9edf1b932d78b9def1e4" alt="The WeMod app on a sample game called Your Game, with Unlimited Health switched On in the Player group" aspect="1920 / 1092" bleed="right"></x-import>
+</div>
+</div>
+</div>
+<div class="mx-change-grid"><div></div><p class="mx-caption">The WeMod app, shown with a sample game.</p></div>
+</section>
+
+<div class="mx-sec"><x-import component-from-global-scope="WeModWeb.HomeSection" id="how">
+<x-import component-from-global-scope="WeModWeb.SectionHeading" title="How to Turn It On" message="Three steps, then one switch."></x-import>
+<div class="mx-steps">
+<x-import component-from-global-scope="WeModWeb.StepCard" step="download" label="Step 1" title="Install WeMod" body="Download and open the free Windows app." art="/_blob/8cf2e08117ef5e2e047487bb4ec9dc33" art-narrow="/_blob/ae169d34b809fe937fd77504a8c46f3c" art-alt="Store launcher icons in detection rings"></x-import>
+<x-import component-from-global-scope="WeModWeb.StepCard" step="features" label="Step 2" title="Launch Your Game" body="Open WeMod and launch Red Dead Redemption 2 from your library." art-layers="{{step2Layers}}" art-narrow-layers="{{step2Narrow}}" art-alt="A sample game running with the WeMod in-game overlay"></x-import>
+<x-import component-from-global-scope="WeModWeb.StepCard" step="play" label="Step 3" title="Enable Unlimited Health" body="Enable Unlimited Health in Customize, or use the Alt+W in-game overlay." art-layers="{{step3Layers}}" art-narrow="/_blob/32bd1eeaa70878ec48973bbaced97413" art-alt="WeMod mod toggles switched On, with category chips"></x-import>
+</div>
+</x-import>
+
+</div>
+<div class="mx-sec"><x-import component-from-global-scope="WeModWeb.HomeSection" id="before-you-start">
+<x-import component-from-global-scope="WeModWeb.FaqList" heading="Before You Start" items="{{faq}}"></x-import>
+<div class="mx-fit-row">
+<div class="mx-fit-spacer"></div>
+<div class="mx-fact">
+<h3>Stores Listed on WeMod</h3>
+<ul class="mx-stores">
+<li><img src="/_blob/af114a214f3049140596ecb0ee0b9fc0" alt="">Steam</li>
+<li><img src="/_blob/657b91bfe51d0aba7cbb4fd22f985b46" alt="">Rockstar Games</li>
+<li><img src="/_blob/c5295da98734f866afacaf743bdc5bf3" alt="">Epic Games</li>
+</ul>
+<p class="mx-gap">Supported game versions and how to turn Unlimited Health off aren't confirmed on this page yet.</p>
+</div>
+</div>
+</x-import>
+
+</div>
+<div class="mx-sec"><x-import component-from-global-scope="WeModWeb.HomeSection" id="trainer">
+<x-import component-from-global-scope="WeModWeb.SectionHeading" title="In the Same Trainer" message="Unlimited Health is one of 11 mods for Red Dead Redemption 2 on WeMod."></x-import>
+<div class="mx-trainer">
+<div class="mx-group">
+<p class="mx-group-head"><img src="/_blob/46018a157f676143b6945042751bb0c5" alt="">Player Mods</p>
+<ul class="mx-mods">
+<li class="is-this">Unlimited Health</li>
+<li>Unlimited Energy</li>
+<li>Unlimited Deadeye</li>
+<li>Unlimited Focus</li>
+<li>No Bounty</li>
+</ul>
+</div>
+<div class="mx-group">
+<p class="mx-group-head"><img src="/_blob/1b0cdad640cf0fbd83e4f768d23e8bd4" alt="">Inventory Mods</p>
+<ul class="mx-mods">
+<li>Unlimited Items</li>
+<li>Set Money</li>
+</ul>
+</div>
+<div class="mx-group">
+<p class="mx-group-head"><img src="/_blob/700e2aa39c30b0b96b092f023dfcc275" alt="">Weapons Mods</p>
+<ul class="mx-mods">
+<li>Unlimited Ammo</li>
+<li>No Reload</li>
+</ul>
+</div>
+<div class="mx-group">
+<p class="mx-group-head"><img src="/_blob/b8cb88960dd4e74432c48545293de566" alt="">Vehicles Mods</p>
+<ul class="mx-mods">
+<li>[Horse] Unlimited Health</li>
+<li>[Horse] Unlimited Energy</li>
+</ul>
+</div>
+</div>
+</x-import>
+
+</div>
+<x-import component-from-global-scope="WeModWeb.HomeClose" title="Never See the Death Screen Again" message="Free Windows app · Story mode only" art-src="/_blob/aae81e7d88bcaeea5cd829b3970eaa49" download="{{dl}}" explain="{{explain}}" label="Get WeMod for Red Dead Redemption 2"></x-import>
+
+<p class="mx-credit">WeMod by Wand</p>
+<x-import component-from-global-scope="WeModWeb.HomeFooter" links="{{footerLinks}}" social="{{social}}" locales="{{locales}}"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":5200}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      yes: true,
+      one: 1,
+      isWindows: true,
+      step2Layers: [
+        { src: '/_blob/175e0e05ef450a98914724353e1c933b', left: '468px', top: '33px', width: '492px' },
+        { src: '/_blob/3ebdb061b7a8002e72cae3ae63bd9a1e', left: '480px', top: '45px', width: '480px' }
+      ],
+      step2Narrow: { width: '278px', height: '200px', layers: [
+        { src: '/_blob/27db7e8f1ec00136da9667696bcd1904', left: '0px', top: '0px', width: '278px' },
+        { src: '/_blob/f47966858ecb4479e7101c28bf595fe1', left: '6px', top: '6px', width: '266px' }
+      ] },
+      step3Layers: [
+        { src: '/_blob/46ca8441dc18d6fabfab0dd1864a471c', right: '0px', bottom: '0px', width: '614px' }
+      ],
+      faq: [
+        { question: 'Does Unlimited Health work in online mode?', answer: 'No. Unlimited Health works in story mode only.' }
+      ],
+      dl: { label: 'Download for Windows', href: 'https://www.wemod.com/download' },
+      explain: { label: 'See All 11 Mods', href: 'https://www.wemod.com/cheats/red-dead-redemption-2-trainers' },
+      footerLinks: [
+        { label: 'Become a creator' }, { label: 'Terms and Conditions' }, { label: 'Privacy Policy' }, { label: 'Support' }
+      ],
+      social: [
+        { label: 'X', iconSrc: '/_blob/abecd5b0a3c72e6d54f3b5dc02cacf76' },
+        { label: 'Discord', iconSrc: '/_blob/ff03ded4515232308037e9609da09931' },
+        { label: 'YouTube', iconSrc: '/_blob/698ca49333dcda16728808e45148158e' },
+        { label: 'Facebook', iconSrc: '/_blob/96a2b02435a296ee08d3e06264d77a6b' }
+      ],
+      locales: [
+        { code: 'en', label: 'English', src: '/_blob/b4bc28660e2db2baec375d9f572af544', current: true },
+        { code: 'zh', label: 'Chinese', src: '/_blob/e1274d23fe81551f213b0fc4b0c88639' },
+        { code: 'de', label: 'German', src: '/_blob/ae25a81d22d7113e5f9261112d24e4e2' },
+        { code: 'ko', label: 'Korean', src: '/_blob/16cfbb0fc66b6a7853dc936f81715216' },
+        { code: 'es', label: 'Spanish', src: '/_blob/213dcaffba40f7c91fdf6dc47c9efac0' },
+        { code: 'fr', label: 'French', src: '/_blob/dc58763ddd2831435f5e7b2002974d41' },
+        { code: 'pl', label: 'Polish', src: '/_blob/fa37075064a5336c08566bcb1a446ae3' },
+        { code: 'pt-br', label: 'Portuguese (Brazil)', src: '/_blob/ccdd38127048ccc6b248b230a201ea38' },
+        { code: 'ja', label: 'Japanese', src: '/_blob/b36579643447e5e520d931f1a0a7bf81' },
+        { code: 'tr', label: 'Turkish', src: '/_blob/e80c767c2f005c31866ef0a54c6162d4' },
+        { code: 'hi', label: 'Hindi', src: '/_blob/49316520039b77056c7cd468322bee4b' },
+        { code: 'id', label: 'Indonesian', src: '/_blob/828814503ea13c1c404e70bb1e5a918d' },
+        { code: 'it', label: 'Italian', src: '/_blob/f7316a34266bf5102491ff1db82e2cdb' },
+        { code: 'th', label: 'Thai', src: '/_blob/2cba38cc4391b811635d182ae1a87166' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

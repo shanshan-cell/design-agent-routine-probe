@@ -1,0 +1,229 @@
+{
+ "v0_version": "1793734041-0106",
+ "about": "V0 assets a game- or mod-specific WeMod page may not show: they name stores, games, mod categories or mods that are not verified for the page. The guard blocks copying, reading or uploading them (by V0 asset id and by sha256). Assets are fine on brand pages where they are shown as WeMod in general.",
+ "denied": {
+  "a28d89f37662030333cfc8f64265118b": {
+   "sha256": "a56900f5e2e63340f525e677cd3538032c59d1c5531722906b2e2ed64d6df187",
+   "name": "Production Marketing Art/setup-step-1-bg.svg",
+   "reason": "Store orbit with Ubisoft and GOG marks; RDR2 is verified on Steam, Rockstar Games and Epic Games only"
+  },
+  "57ec17eb0032fcadae4bdbe3d1a6da63": {
+   "sha256": "1e404f11624865860498d630d0bd403fb55c42f554ecd137660d37c428504cae",
+   "name": "Production Marketing Art/setup-step-1-moweb-bg.svg",
+   "reason": "Mobile store row with Ubisoft and GOG marks"
+  },
+  "68ffd56a1a673534b15db53e056a6826": {
+   "sha256": "919ce33d7698d2ec8787740a5308375e0e9cc8063a0fdb51f69f2c874d855940",
+   "name": "Production Marketing Art/setup-step-2-bg.png",
+   "reason": "Mod-category pills (Health, Stats, Teleport) that are not RDR2 groups"
+  },
+  "eded28b1ddd09044cf0d3cf5d513dd63": {
+   "sha256": "b48005db9b9ec0f57a812357d04c24a0a288edead4adbd5edabcbd72d79a83ec",
+   "name": "Production Marketing Art/setup-step-2-moweb-bg.svg",
+   "reason": "Mod-category pills (Enemies, Stats, Teleport) that are not RDR2 groups"
+  },
+  "ba20e2672da764a891a2bbf933ea2304": {
+   "sha256": "629a896846fe746fe8a44b0efa595d5a595b41de3ef22d33e1028546fe90a6f0",
+   "name": "Production Marketing Art/setup-step-3-bg-screenshot.webp",
+   "reason": "Sample content, not RDR2: \"Your Game\" overlay with Unlimited Stamina, Game Speed"
+  },
+  "f6adbd3dcaddd70a0b05fcae3f59cb24": {
+   "sha256": "addab91cef9736e648d0b778d6b9ed9f4a432edde8b649fbda7e6a3976eff0e7",
+   "name": "Production Marketing Art/setup-step-3-moweb-bg-screenshot.webp",
+   "reason": "Sample content, not RDR2: \"Your Game\" overlay, mobile crop"
+  },
+  "7fbdf4a0388a0b7e4138c73ded581dc2": {
+   "sha256": "66f027f80f2726d9f286edb1f4a980b1daffc4501fea622a6f28cdb677dcf8e9",
+   "name": "Production Marketing Art/app-screenshot.webp",
+   "reason": "Sample content, not RDR2: \"Your Game\" app window with Speed, Spawn Item, Key Location Teleport"
+  },
+  "b6dcb6ccd8cab2d797668ff3fcb71b52": {
+   "sha256": "15a1eaedb87ef91734c1c94d124ab4aa5b6270da2a72d0802fbdb59abd1c8c54",
+   "name": "Production Marketing Art/overlay-screen-mobile.webp",
+   "reason": "Another game (Elden Ring) in the overlay frame"
+  },
+  "ad9ccc5cdf35332a52d283af070999b4": {
+   "sha256": "3d37fa1304d66eb88366495d40edc81dfcd07e575c83c02643b851300c4a2d41",
+   "name": "Production Marketing Art/overlay-screen-desktop.webp",
+   "reason": "Another game (Elden Ring) in the overlay frame"
+  },
+  "0ec2be3cbdec3dbd4f711823fbb2ca08": {
+   "sha256": "33b21658168c8bd5b1ba32c27fc2907408b8f6716ccaf69fb3b246fc0b47852b",
+   "name": "Production UI Icons/gog.svg",
+   "reason": "Store not verified for RDR2"
+  },
+  "66ed5610219779043c42dd16dd126142": {
+   "sha256": "eedb0b38f321ba3af62a35dd22e825572d6da066769377e8ce1e416fbcaa9757",
+   "name": "Brand & Icons/platform-uplay.svg",
+   "reason": "Store not verified for RDR2"
+  },
+  "d48fd900870f6d57f17ceba2625cf4de": {
+   "sha256": "1f55659c6203629425e615dde36dbd634f6a39946cb0e623694e0498fa9bb3bc",
+   "name": "Brand & Icons/platform-origin.svg",
+   "reason": "Store not verified for RDR2"
+  },
+  "be2ff54ce1e1c63266766b4dee080280": {
+   "sha256": "abd78ddf796dc66a455b9feebf778a58b4d4067bf8a1c8cab34559a2bf8abc7a",
+   "name": "Brand & Icons/platform-xbox.svg",
+   "reason": "Store not verified for RDR2"
+  },
+  "07fdbf2232305325611d6ea4a218bcf9": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-roachapproach.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "471d310c806959bf37c88b0b8fac7b4d": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-modded-tortoise.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "a962c4c71fdbae629829a9c209bda5c8": {
+   "sha256": null,
+   "name": "RDR2 Page Media/achievement-just-a-scratch.jpg",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "21840f8bb8ce4de93381e6b660bf5eaf": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-kyr0n99.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "12d5672a7bdf9312ca9055c06580b1d8": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-lostmanabroad.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "41691b866a88c12bc65fa9481154b823": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-amplepancake101.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "d1fb02191ef99c469087ce4db42ef120": {
+   "sha256": null,
+   "name": "RDR2 Page Media/rdr2-map-thumbnail.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "5be880bec02f66ad71185514974a8006": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-aprilia1k.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "1f79d827d2e30200ce2d2242ceadc405": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-bubba55.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "fb3fb300ff3ecb578b3ec135a8cd5f2b": {
+   "sha256": null,
+   "name": "RDR2 Page Media/achievement-trusty-steed.jpg",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "e7fe70243d6781e52fb840c6fa23f782": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-nellyvylle.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "72bb2aed67ea4ee4d2f95aa4984ad4ab": {
+   "sha256": null,
+   "name": "RDR2 Page Media/rdr2-trainer-screenshot-2400.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "8eb3f072c0779180de5852022342ff1e": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-thehawg.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "2a267589b9613ebedb2b5569803c30ca": {
+   "sha256": null,
+   "name": "RDR2 Page Media/rdr2-hero-capsule.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "762547c90b67ae1799caccf11e1c9870": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-properworm584.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "570eaf1c7ecb3b1ab2ca0ca7c3ae4cb4": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-mikeraymer67.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "0cf2c1e8108f91c00e0747925439dd07": {
+   "sha256": null,
+   "name": "RDR2 Page Media/rdr2-library-hero.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "99d0a3d3c149dda43fda072ae3bb0f59": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-toxinrayn.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "723e39c448ca47f50fc0da4067c8d770": {
+   "sha256": null,
+   "name": "RDR2 Page Media/creator-avatar-mrantifun-32.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "5767d5a5305b1e7beca84ba184988854": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-komradzx.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "902013fa8c4e74e46532db4b13c75943": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-perfectboat540.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "82bcc6c491eaedec793b11a9f73235a2": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-albert191.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "a0954975bf6c39a78ae9ba2a9d32ebba": {
+   "sha256": null,
+   "name": "RDR2 Page Media/achievement-back-in-the-mud.jpg",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "39afa1ed6a066a6afc12c681e779d7f6": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-eclipse25.webp",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "7071bc6f6de204c52bcee79252ee9988": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-likelycheese953.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "fe34cec6d7aa28c35c9221e16d535ea1": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-plainhamster308.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "19301583c5465bd0edc8de109a4322d5": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-dtmb0525.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  },
+  "2ee0ac6d8f40cff9e1f21e031d7f6f83": {
+   "sha256": null,
+   "name": "RDR2 Page Media/avatar-invisiblefire352.png",
+   "reason": "Brief: RDR2-specific media are not approved yet"
+  }
+ },
+ "denied_groups": {
+  "RDR2 Page Media": "Brief: RDR2-specific media are not approved yet"
+ },
+ "unverified_text": [
+  "GOG",
+  "Ubisoft",
+  "Uplay",
+  "Origin",
+  "EA app",
+  "Xbox",
+  "Battle.net",
+  "Microsoft Store",
+  "Unlimited Stamina",
+  "Game Speed",
+  "Spawn Item",
+  "Key Location Teleport",
+  "Your Game"
+ ]
+}
