@@ -1,0 +1,12 @@
+{
+  "contract": "wemod-design-result/v1",
+  "ticket": "SMOKE-1",
+  "run_key": "SMOKE-1-0000000000000000",
+  "status": "failed",
+  "canvas_url": null,
+  "canvas_title": "",
+  "summary": "Smoke test of the completion contract; no design was made.",
+  "limitations": [],
+  "session_id": "cse_01BLdKrsWFSQ6WZiXCEfNNh5",
+  "reported_at": "2026-11-03T21:55:04Z"
+}
