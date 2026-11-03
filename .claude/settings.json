@@ -4,7 +4,7 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/read_only_guard.py\"" }
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/design_guard.py\"" }
         ]
       }
     ],
@@ -12,12 +12,12 @@
       {
         "matcher": "Artifact",
         "hooks": [
-          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/read_only_guard.py\" --post" }
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/design_guard.py\" --post" }
         ]
       }
     ]
   },
   "permissions": {
-    "deny": ["Bash", "NotebookEdit", "WebFetch", "WebSearch", "Agent", "Task", "Skill", "DesignSync", "ArtifactComments", "ArtifactData", "mcp__*"]
+    "deny": ["NotebookEdit", "WebFetch", "WebSearch", "DesignSync", "ArtifactComments", "ArtifactData", "mcp__*"]
   }
 }
