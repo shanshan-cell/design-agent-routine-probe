@@ -7,6 +7,16 @@ silent or open, this file decides for probe runs until the design owner moves th
 `tools/check_requirements.py` checks them on the board files, and the guard runs the same check on every publish of
 `project/Page-1440.dc.html` or `project/Page-390.dc.html`. A failing board is never published.
 
+## Scope · one game or many
+
+R1–R3 apply to every WeMod page a probe run designs. Where they name RDR2 they describe the RDR2 brief; for a page
+about many games (game discovery, all games) read them as follows, without relaxing anything:
+
+- R2: the phone action is all games (`https://www.wemod.com/cheats`) or a game page the brief names.
+- R3: every game, route, mod count and store shown comes from the brief or V0's `Catalog Thumbnails` and capture
+  fixtures. The denylist applies in full (its stores, sample screenshots and RDR2 Page Media stay blocked), and a
+  store the brief doesn't verify is never named or shown.
+
 ## R1 · "WeMod by Wand" brand line
 
 - The words **WeMod by Wand** appear, exactly so, as visible text on both boards at least once. Put them in the brand
