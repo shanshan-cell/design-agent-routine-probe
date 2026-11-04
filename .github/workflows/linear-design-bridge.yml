@@ -4,12 +4,19 @@ name: Linear design bridge
 # routine for allowlisted tickets that carry the ai-design label (Product team). Scheduled workflows always run the default
 # branch's code, so a result branch can never change what runs here.
 # The schedule is OFF unless the repo variable LINEAR_DESIGN_BRIDGE_ENABLED is 'true' (the job is skipped).
-# workflow_dispatch is a dry run only: it reads Linear and GitHub and prints what it would do, writing nothing.
+# workflow_dispatch defaults to a dry run (reads Linear and GitHub, prints what it would do, writes nothing);
+# mode=live runs one normal tick, with the same allowlist, claim tags and dedupe as a scheduled one.
 
 on:
   schedule:
     - cron: '7-59/10 * * * *' # every 10 min, off the hour (GitHub drops top-of-hour ticks under load); runs as the last committer of this line, who must be a linked GitHub user
   workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run writes nothing; live runs one real tick (may fire the routine)
+        type: choice
+        options: [dry-run, live]
+        default: dry-run
 
 concurrency:
   group: linear-design-bridge
@@ -20,7 +27,7 @@ permissions:
 
 jobs:
   tick:
-    # The schedule needs the switch; a manual dispatch is always a dry run, so it may run before the switch is on.
+    # The schedule needs the switch; a manual dispatch runs regardless (dry-run by default).
     if: vars.LINEAR_DESIGN_BRIDGE_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -35,5 +42,5 @@ jobs:
           ROUTINE_FIRE_URL: ${{ secrets.ROUTINE_FIRE_URL }}
           ROUTINE_FIRE_TOKEN: ${{ secrets.ROUTINE_FIRE_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-          DRY: ${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'live' && '--dry-run' || '' }}
         run: python3 -I bridge/bridge.py tick $DRY
