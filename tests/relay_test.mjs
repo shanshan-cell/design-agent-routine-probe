@@ -4,7 +4,7 @@ import { createHmac } from 'node:crypto';
 import { handle, scheduled } from '../relay/worker.js';
 
 const env = {
-  LINEAR_WEBHOOK_SECRET: 'lin-secret', GITHUB_WEBHOOK_SECRET: 'gh-secret', GITHUB_DISPATCH_TOKEN: 'ghp_test',
+  LINEAR_WEBHOOK_SECRET: 'lin-secret-0123456789', GITHUB_WEBHOOK_SECRET: 'gh-secret-0123456789', GITHUB_DISPATCH_TOKEN: 'ghp_test',
   REPO: 'owner/repo', WORKFLOW: 'linear-design-bridge.yml',
   AI_DESIGN_LABEL_ID: '56a3977a-dd58-4cec-a0aa-9522df1f27fb', TEAM_ID: '3b01e73d-6636-4ff9-9f8a-c758f4d806ef',
 };
@@ -76,6 +76,15 @@ r = await run(githubReq({ ref: 'refs/heads/claude/design-result-X' }, { kind: 'c
 check('non-push GitHub event: ignored', r.calls.length === 0);
 r = await run(githubReq({ ref: 'refs/heads/claude/design-result-X' }, { secret: 'wrong' }));
 check('bad GitHub signature: 401', r.status === 401 && r.calls.length === 0);
+
+for (const [name, secretVar, req] of [
+  ['Linear', 'LINEAR_WEBHOOK_SECRET', () => linearReq(issue(), { secret: 'undefined' })],
+  ['GitHub', 'GITHUB_WEBHOOK_SECRET', () => githubReq({ ref: 'refs/heads/claude/design-result-X' }, { secret: 'undefined' })],
+]) {
+  const f = fakeFetch();
+  const res = await handle(req(), { ...env, [secretVar]: undefined }, f, NOW);
+  check(`${name} secret not set: 401, even when signed with "undefined"`, res.status === 401 && f.calls.length === 0);
+}
 
 r = await run(new Request('https://relay.example/linear', { method: 'GET' }));
 check('GET: 404', r.status === 404);

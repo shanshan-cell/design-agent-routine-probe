@@ -16,6 +16,7 @@
 const enc = new TextEncoder();
 
 async function hmacHex(secret, body) {
+  if (typeof secret !== 'string' || secret.length < 16) return null; // unset secret: refuse every delivery
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(body)));
   return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -69,7 +70,8 @@ export async function handle(request, env, fetchImpl = fetch, now = Date.now()) 
   if (body.length > 1_000_000) return new Response('too large', { status: 413 });
 
   if (path === '/linear') {
-    if (!sameText(request.headers.get('linear-signature') ?? '', await hmacHex(env.LINEAR_WEBHOOK_SECRET, body))) {
+    const want = await hmacHex(env.LINEAR_WEBHOOK_SECRET, body);
+    if (!want || !sameText(request.headers.get('linear-signature') ?? '', want)) {
       return new Response('bad signature', { status: 401 });
     }
     const event = JSON.parse(body);
@@ -80,7 +82,8 @@ export async function handle(request, env, fetchImpl = fetch, now = Date.now()) 
   }
 
   const sig = request.headers.get('x-hub-signature-256') ?? '';
-  if (!sameText(sig, `sha256=${await hmacHex(env.GITHUB_WEBHOOK_SECRET, body)}`)) return new Response('bad signature', { status: 401 });
+  const want = await hmacHex(env.GITHUB_WEBHOOK_SECRET, body);
+  if (!want || !sameText(sig, `sha256=${want}`)) return new Response('bad signature', { status: 401 });
   const event = JSON.parse(body);
   if (!resultPushed(event, request.headers)) return new Response('ignored');
   return (await dispatch(env, `github ${event.ref}`, fetchImpl))
