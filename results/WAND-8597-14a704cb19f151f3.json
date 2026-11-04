@@ -1,0 +1,19 @@
+{
+  "contract": "wemod-design-result/v1",
+  "ticket": "WAND-8597",
+  "run_key": "WAND-8597-14a704cb19f151f3",
+  "status": "ready",
+  "canvas_url": "https://claude.ai/artifact/9QuF9LMr4UD2U3f4xrDHh3",
+  "canvas_title": "WAND-8597 - Game Compatibility Finder - Design exploration",
+  "summary": "I designed a first-round exploration of a WeMod \"Does WeMod Work With My Game?\" page, in the direction \"one search, an honest answer\". On desktop, a search-first hero sits over a wall of real game art. Below it is a section that shows what a result means: a listed game with its real cheat count, or a \"no quick match\" that never claims a game is unsupported and offers a search of all games. Then a browse list, then a Download for Windows close. The phone keeps the same search journey with no download, and ends with \"\u2026or visit us on your PC to download the app\" plus a Browse All Games link. Searching, listed and no-listing states are shown at 1440 and 390. Exploration only, not approved for production.",
+  "limitations": [
+    "Independent AI review (blind, round 2): A 74/100, B 70/100, status Revise, alignment Partial. Not a human design review.",
+    "Open review fixes: the example search fields in section 2 look live, the browse list is text-only, the searching state has no skeleton, and the phone close action is a glass pill.",
+    "No real fallback for an unlisted game (request a game or \"did you mean\") without the catalogue search API. New copy and the \"3,000+\" count need sign-off.",
+    "New H1 and indexable copy on a new route: seo_risk high, needs Growth sign-off. The metric and its owner are unknown.",
+    "HomeSearch and HomeClose are Proposed V0 parts. The brand-page phone action (R115) is undecided. Where \"WeMod by Wand\" sits is a design-owner decision.",
+    "No stores are shown because the brief verifies none. Per-game store or version compatibility needs a data source."
+  ],
+  "session_id": "cse_01BLdKrugCXYZ3pHmtHNdd5U",
+  "reported_at": "2026-11-04T15:37:50Z"
+}
