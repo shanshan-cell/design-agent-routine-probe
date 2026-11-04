@@ -20,7 +20,10 @@ import bridge  # noqa: E402
 CLAUDE = 'd3ff2737-0bdc-41a7-855b-3168295c4823'
 AI_DESIGN = {'id': '56a3977a-dd58-4cec-a0aa-9522df1f27fb', 'name': 'ai-design'}
 T = 'WAND-9001'
-OTHER = 'WAND-9002'
+OTHER = 'WAND-9002'  # another team's ticket
+PRODUCT = '3b01e73d-6636-4ff9-9f8a-c758f4d806ef'
+MEMBER = {'id': 'u2', 'name': 'A PM', 'url': None, 'guest': False, 'active': True}
+RUN_URL = 'https://github.com/owner/repo/actions/runs/77'
 FIRE_URL = 'https://api.anthropic.com/v1/claude_code/routines/trig_01TestTestTest/fire'
 CANVAS = 'https://claude.ai/artifact/AbCdEfGhIjKlMnOp'
 BRIEF = '# WeMod - RDR2 Unlimited Health\nDesign a full page for players searching for the mod. ' * 3
@@ -37,9 +40,9 @@ def check(name, cond):
         print(f'FAIL {name}')
 
 
-def cfg():
+def cfg(**over):
     c = bridge.load_config()
-    c['allowed_tickets'] = [T]
+    c.update(over)
     return c
 
 
@@ -49,11 +52,11 @@ class World:
     def __init__(self):
         self.issues = {
             T: {'id': 'uuid-1', 'identifier': T, 'title': 'RDR2 Unlimited Health page', 'description': BRIEF,
-                'url': f'https://linear.app/wemod/issue/{T}', 'state': {'type': 'unstarted'},
-                'labels': {'nodes': [AI_DESIGN]}, 'creator': {'id': 'u2', 'name': 'A PM'}, 'comments': {'nodes': []}},
-            OTHER: {'id': 'uuid-2', 'identifier': OTHER, 'title': 'Other', 'description': BRIEF,
-                    'url': 'x', 'state': {'type': 'unstarted'}, 'labels': {'nodes': [AI_DESIGN]}, 'creator': None,
-                    'comments': {'nodes': []}},
+                'url': f'https://linear.app/wemod/issue/{T}', 'team': {'id': PRODUCT}, 'state': {'type': 'unstarted'},
+                'labels': {'nodes': [AI_DESIGN]}, 'creator': dict(MEMBER), 'comments': {'nodes': []}},
+            OTHER: {'id': 'uuid-2', 'identifier': OTHER, 'title': 'Other', 'description': BRIEF, 'url': 'x',
+                    'team': {'id': 'another-team'}, 'state': {'type': 'unstarted'}, 'labels': {'nodes': [AI_DESIGN]},
+                    'creator': dict(MEMBER), 'comments': {'nodes': []}},
         }
         self.read = []          # Linear issue reads (identifiers)
         self.comments = []      # (identifier, body)
@@ -64,6 +67,11 @@ class World:
         self.fire_status = 200
         self.race = False       # the next ref create returns 422
 
+    @property
+    def out(self):
+        """Comments other than the "started" notice."""
+        return [c for c in self.comments if '· started' not in c[1]]
+
     def http(self, method, url, headers, body=None, timeout=30):
         if url == bridge.LINEAR_URL:
             q, v = body['query'], body['variables']
@@ -72,14 +80,18 @@ class World:
                 self.comments.append((ident, v['body']))
                 self.issues[ident]['comments']['nodes'].append({'id': 'c', 'body': v['body'], 'user': {'id': CLAUDE}})
                 return 200, {'data': {'commentCreate': {'success': True, 'comment': {'id': 'c', 'url': 'https://linear.app/c'}}}}
+            if 'DesignBridgeQueue' in q:
+                return 200, {'data': {'issues': {'nodes': [copy.deepcopy(i) for i in self.issues.values()
+                    if i['team']['id'] == v['team'] and v['label'] in {l['id'] for l in i['labels']['nodes']}
+                    and i['state']['type'] not in ('completed', 'canceled')]}}}
             self.read.append(v['id'])
             return 200, {'data': {'issue': copy.deepcopy(self.issues.get(v['id']))}}
         if url == FIRE_URL:
             self.fires.append(body['text'])
             if self.fire_status != 200:
                 return self.fire_status, {'type': 'error', 'error': {'type': 'rate_limit_error'}}
-            return 200, {'type': 'routine_fire', 'claude_code_session_id': f'session_{len(self.fires)}',
-                         'claude_code_session_url': f'https://claude.ai/code/session_{len(self.fires)}'}
+            return 200, {'type': 'routine_fire', 'claude_code_session_id': f'cse_{len(self.fires)}',
+                         'claude_code_session_url': f'https://claude.ai/code/cse_{len(self.fires)}'}
         path = url.split('/repos/owner/repo/', 1)[1]
         if method == 'GET' and path.startswith('git/matching-refs/'):
             pre = 'refs/' + path[len('git/matching-refs/'):]
@@ -118,13 +130,17 @@ class World:
             t['date'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(then))
 
 
-def tick(w, c, dry=False):
+def tick(w, c, dry=False, firing=True):
     bridge.http = w.http
     lin = bridge.Linear('lin_api_test', dry)
     gh = bridge.GitHub('ghs_test', 'owner/repo', dry)
-    for step in (lambda: bridge.collect(c, lin, gh), lambda: bridge.sweep(c, lin, gh, time.time()),
-                 lambda: bridge.poll(c, lin, gh, FIRE_URL, 'sk-ant-oat01-test')):
-        step()
+    issues = bridge.Issues(lin)
+    for step in (lambda: bridge.collect(c, lin, gh, issues), lambda: bridge.sweep(c, lin, gh, issues, time.time()),
+                 lambda: bridge.poll(c, lin, gh, issues, FIRE_URL, 'sk-ant-oat01-test', firing, RUN_URL, time.time())):
+        try:
+            step()
+        except bridge.BridgeError as e:  # as in bridge.main: one failing step never stops the others
+            print(f'  (tick error: {e})')
 
 
 def key_for(w, t=T):
@@ -151,7 +167,13 @@ c = cfg()
 w = World()
 i = w.issues[T]
 check('eligible with the ai-design label', bridge.eligible(i, c) == (True, ''))
-check('not eligible off the allowlist', not bridge.eligible(w.issues[OTHER], c)[0])
+check('not eligible in another team', not bridge.eligible(w.issues[OTHER], c)[0])
+check('not eligible on ignore_tickets', not bridge.eligible({**i, 'identifier': 'WAND-8583'}, c)[0])
+check('a full member may request', bridge.requester_ok(i) == (True, ''))
+check('a guest may not request', not bridge.requester_ok({**i, 'creator': {**MEMBER, 'guest': True}})[0])
+check('a deactivated user may not request', not bridge.requester_ok({**i, 'creator': {**MEMBER, 'active': False}})[0])
+check('an integration-created ticket may not request', not bridge.requester_ok({**i, 'creator': None})[0])
+check('session link opens the session page', bridge.session_link('https://claude.ai/code/cse_01AB') == 'https://claude.ai/code/session_01AB')
 check('not eligible without labels', not bridge.eligible({**i, 'labels': {'nodes': []}}, c)[0])
 check('not eligible with a same-named label from another team', not bridge.eligible({**i, 'labels': {'nodes': [{'id': 'other', 'name': 'ai-design'}]}}, c)[0])
 check('not eligible with the Data team label', not bridge.eligible({**i, 'labels': {'nodes': [{'id': 'x', 'name': 'claude-analysis'}]}}, c)[0])
@@ -169,10 +191,14 @@ tick(w, c)
 k = key_for(w)
 check('first tick fires once', len(w.fires) == 1 and f'ticket: {T}' in w.fires[0])
 check('claim and fired tags exist', f'refs/tags/design-claim/{k}' in w.refs and f'refs/tags/design-fired/{k}' in w.refs)
-check('non-allowlisted ticket never read', OTHER not in w.read)
+check('another team\'s ticket is never fired', all(f'ticket: {OTHER}' not in f for f in w.fires))
+started = [b for _, b in w.comments if '· started' in b]
+check('one started comment', len(w.comments) == 1 and len(started) == 1 and w.comments[0][0] == T)
+check('started comment links the GitHub run and the Claude session',
+      bool(started) and f']({RUN_URL})' in started[0] and '](https://claude.ai/code/session_1)' in started[0])
 tick(w, c)
 check('second tick does not fire again', len(w.fires) == 1)
-check('no comment while the run is in flight', w.comments == [])
+check('nothing more while the run is in flight', len(w.comments) == 1)
 w.issues[T]['description'] += '\nAlso: mobile first.'
 tick(w, c)
 check('an edited brief fires a new run', len(w.fires) == 2)
@@ -198,14 +224,51 @@ w = World()
 tick(w, c, dry=True)
 check('dry run fires nothing, tags nothing, comments nothing', w.fires == [] and w.refs == {} and w.comments == [])
 
+# --- kill switch, requester, caps ---
+w = World()
+tick(w, c, firing=False)
+check('firing off: no fire, no claim, no comment', w.fires == [] and w.refs == {} and w.comments == [])
+tick(w, c)
+check('firing back on: the waiting brief fires', len(w.fires) == 1)
+
+w = World()
+w.issues[T]['creator']['guest'] = True
+tick(w, c)
+tick(w, c)
+check('guest request: one not-started comment, no fire', w.fires == [] and len(w.comments) == 1
+      and '· not-started' in w.comments[0][1] and 'full workspace members' in w.comments[0][1])
+
+w = World()
+w.issues['WAND-8583'] = {**copy.deepcopy(w.issues[T]), 'id': 'uuid-8583', 'identifier': 'WAND-8583'}
+tick(w, c)
+check('ignore_tickets are never fired', all('ticket: WAND-8583' not in f for f in w.fires) and len(w.fires) == 1)
+
+w = World()
+tick(w, c)
+w.issues[T]['description'] += '\nAlso: mobile first.'
+tick(w, cfg(max_fires_per_day=1))
+check('daily limit: one not-started comment, no second fire', len(w.fires) == 1 and len(w.out) == 1
+      and '· not-started' in w.out[0][1] and 'daily limit of 1' in w.out[0][1])
+
+w = World()
+tick(w, c)
+k1 = key_for(w)
+w.issues[T]['description'] += '\nAlso: mobile first.'
+tick(w, cfg(max_in_flight=1))
+tick(w, cfg(max_in_flight=1))
+check('in-flight limit: the next brief waits silently', len(w.fires) == 1 and w.out == [])
+push_result(w, k1, ready_doc(k1))
+tick(w, cfg(max_in_flight=1))
+check('in-flight limit: it fires once the first run reports', len(w.fires) == 2)
+
 # --- collect: one comment per result ---
 w = World()
 tick(w, c)
 k = key_for(w)
 push_result(w, k, ready_doc(k))
 tick(w, c)
-check('ready result posts one comment', len(w.comments) == 1)
-body = w.comments[0][1] if w.comments else ''
+check('ready result posts one comment', len(w.out) == 1)
+body = w.out[0][1] if w.out else ''
 check('comment links the canvas', f']({CANVAS})' in body)
 check('comment mentions the reviewer', 'https://linear.app/wemod/profiles/shanshan ready for your review' in body)
 check('comment says not approved', 'not approved for production' in body)
@@ -214,7 +277,7 @@ check('comment strips agent links', 'evil.example' not in body)
 check('comment links the run log', 'https://claude.ai/code/session_1' in body)
 check('comment has the result marker', f'design-run:{k} · result' in body)
 tick(w, c)
-check('redelivery does not duplicate', len(w.comments) == 1)
+check('redelivery does not duplicate', len(w.out) == 1)
 
 for name, doc, files, ahead in [
     ('extra file in the branch', None, ['results/K.json', '.github/workflows/x.yml'], 1),
@@ -231,57 +294,58 @@ for name, doc, files, ahead in [
     files = [f.replace('K', k) for f in files] if files else None
     push_result(w, k, ready_doc(k, **(doc or {})), files, ahead)
     tick(w, c)
-    check(f'rejects result: {name}', w.comments == [])
+    check(f'rejects result: {name}', w.out == [])
 
 w = World()
 k = key_for(w)
 push_result(w, k, ready_doc(k))
 tick(w, c, dry=True)
-check('result without a claim is ignored', w.comments == [])
+check('result without a claim is ignored', w.out == [])
 
 w = World()
 k2 = key_for(w, OTHER)
 w.refs[f'refs/tags/design-claim/{k2}'] = 'x'
+w.tags['x'] = {'message': '{}', 'date': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
 push_result(w, k2, ready_doc(k2, ticket=OTHER))
-tick(w, c, dry=True)
-check('result for a non-allowlisted ticket is never read or posted', w.comments == [] and OTHER not in w.read)
+tick(w, c)
+check('result for another team\'s ticket is never posted', all(t != OTHER for t, _ in w.comments))
 
 w = World()
 tick(w, c)
 k = key_for(w)
 push_result(w, k, ready_doc(k, status='failed', canvas_url=None, summary='The gate never opened.'))
 tick(w, c)
-check('failed result posts an honest failure', len(w.comments) == 1 and "couldn't finish" in w.comments[0][1]
-      and 'claude.ai/artifact' not in w.comments[0][1])
+check('failed result posts an honest failure', len(w.out) == 1 and "couldn't finish" in w.out[0][1]
+      and 'claude.ai/artifact' not in w.out[0][1])
 
 # --- sweep: runs that never report back ---
 w = World()
 tick(w, c)
 w.age_claims(c['result_timeout_minutes'] - 5)
 tick(w, c)
-check('no timeout before the limit', w.comments == [])
+check('no timeout before the limit', w.out == [])
 w.age_claims(10)
 tick(w, c)
-check('timeout posts once', len(w.comments) == 1 and '· timeout' in w.comments[0][1])
+check('timeout posts once', len(w.out) == 1 and '· timeout' in w.out[0][1])
 tick(w, c)
-check('timeout not repeated', len(w.comments) == 1)
+check('timeout not repeated', len(w.out) == 1)
 k = key_for(w)
 push_result(w, k, ready_doc(k))
 tick(w, c)
-check('a late result still posts after a timeout', len(w.comments) == 2 and '· result' in w.comments[1][1])
+check('a late result still posts after a timeout', len(w.out) == 2 and '· result' in w.out[1][1])
 
 # --- auth header: personal key bare, OAuth app token as Bearer ---
 check('personal key sent bare', bridge.Linear('lin_api_abc', True).key == 'lin_api_abc')
 check('OAuth app token sent as Bearer', bridge.Linear('oauth-token-abc', True).key == 'Bearer oauth-token-abc')
 
-# --- the comment refuses off-allowlist tickets even if called directly ---
+# --- the comment refuses another team's tickets even if called directly ---
 w = World()
 bridge.http = w.http
 try:
     bridge.Linear('k', False).comment(w.issues[OTHER], 'x', c)
-    check('comment refused off the allowlist', False)
+    check('comment refused for another team', False)
 except bridge.BridgeError:
-    check('comment refused off the allowlist', w.comments == [])
+    check('comment refused for another team', w.comments == [])
 
 # --- report_result.py (dry run) ---
 REPORT = os.path.join(ROOT, 'tools', 'report_result.py')

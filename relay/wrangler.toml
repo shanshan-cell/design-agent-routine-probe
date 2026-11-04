@@ -1,14 +1,18 @@
-# Cloudflare Worker for relay/worker.js. Not deployed until approved. Secrets are set with
-# `wrangler secret put LINEAR_WEBHOOK_SECRET` / `GITHUB_WEBHOOK_SECRET` / `GITHUB_DISPATCH_TOKEN`, never in this file.
+# Cloudflare Worker for relay/worker.js. Secrets are set with `wrangler secret put LINEAR_READ_KEY` /
+# `LINEAR_WEBHOOK_SECRET` / `GITHUB_WEBHOOK_SECRET` / `GITHUB_DISPATCH_TOKEN`, never in this file.
 name = "wemod-design-bridge-relay"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
+# RELAY_ENABLED (the kill switch) is a dashboard variable, not set here, so a deploy never turns the relay back on.
+keep_vars = true
+
 [triggers]
-crons = ["17 * * * *"] # hourly tick for timeouts; duplicates are harmless (claim tags, one comment per run)
+crons = ["*/2 * * * *"] # poll Linear; a tick only when a brief is waiting (or hourly while a run is in flight)
 
 [vars]
 REPO = "shanshan-cell/design-agent-routine-probe"
 WORKFLOW = "linear-design-bridge.yml"
 AI_DESIGN_LABEL_ID = "56a3977a-dd58-4cec-a0aa-9522df1f27fb" # ai-design, Product team
 TEAM_ID = "3b01e73d-6636-4ff9-9f8a-c758f4d806ef"            # Product (WAND)
+IGNORE_TICKETS = "WAND-8583,WAND-8363"                       # same as bridge/config.json ignore_tickets (earlier tests)

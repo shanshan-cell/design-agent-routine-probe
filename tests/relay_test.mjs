@@ -1,11 +1,11 @@
 // Offline tests for relay/worker.js: signed and unsigned deliveries, label transitions, result pushes.
 //   node tests/relay_test.mjs
 import { createHmac } from 'node:crypto';
-import { handle, scheduled } from '../relay/worker.js';
+import { handle, scheduled, fingerprint, survey } from '../relay/worker.js';
 
 const env = {
   LINEAR_WEBHOOK_SECRET: 'lin-secret-0123456789', GITHUB_WEBHOOK_SECRET: 'gh-secret-0123456789', GITHUB_DISPATCH_TOKEN: 'ghp_test',
-  REPO: 'owner/repo', WORKFLOW: 'linear-design-bridge.yml',
+  REPO: 'owner/repo', RELAY_ENABLED: 'on', LINEAR_READ_KEY: 'lin_api_read', IGNORE_TICKETS: 'WAND-8583', WORKFLOW: 'linear-design-bridge.yml',
   AI_DESIGN_LABEL_ID: '56a3977a-dd58-4cec-a0aa-9522df1f27fb', TEAM_ID: '3b01e73d-6636-4ff9-9f8a-c758f4d806ef',
 };
 const NOW = 1793750000000;
@@ -91,11 +91,64 @@ check('GET: 404', r.status === 404);
 r = await run(new Request('https://relay.example/other', { method: 'POST', body: '{}' }));
 check('unknown path: 404', r.status === 404);
 
-let f = fakeFetch();
-await scheduled(env, f);
-check('hourly cron: one live dispatch on main', f.calls.length === 1 && JSON.parse(f.calls[0].init.body).inputs.mode === 'live');
-f = fakeFetch(403);
-check('hourly cron: refused dispatch throws so Cloudflare logs a failure', await scheduled(env, f).then(() => false, () => true));
+// --- polling: fingerprints match bridge.fingerprint (values computed with bridge/bridge.py) ---
+check('fingerprint matches the bridge', await fingerprint('Game page', 'A brief with ünïcode — and more text here to pass forty chars') === 'ab4980f872f8eac1');
+check('fingerprint of an empty description matches the bridge', await fingerprint('T', null) === '678f81a714fbc720');
+
+const BRIEF = 'Design a game discovery page for players looking for mods. '.repeat(2);
+const fp = await fingerprint('Discovery', BRIEF);
+const ticket = (id, comments = [], over = {}) => ({ identifier: id, title: 'Discovery', description: BRIEF,
+  comments: { nodes: comments.map((body) => ({ body })) }, ...over });
+let sv = await survey([ticket('WAND-1')]);
+check('new brief: waiting', sv.waiting.join() === 'WAND-1' && sv.inFlight.length === 0);
+sv = await survey([ticket('WAND-1', [`_design-run:WAND-1-${fp} · started_`])]);
+check('started: not waiting, in flight', sv.waiting.length === 0 && sv.inFlight.join() === `WAND-1-${fp}`);
+sv = await survey([ticket('WAND-1', [`_design-run:WAND-1-${fp} · started_`, `_design-run:WAND-1-${fp} · result · [run log](x)_`])]);
+check('result posted: nothing waiting or in flight', sv.waiting.length === 0 && sv.inFlight.length === 0);
+sv = await survey([ticket('WAND-1', [`_design-run:WAND-1-0000000000000000 · result_`])]);
+check('edited brief (new fingerprint): waiting again', sv.waiting.join() === 'WAND-1');
+sv = await survey([ticket('WAND-1', [`_design-run:WAND-1-${fp} · not-started_`])]);
+check('not started (guest or daily limit): not waiting', sv.waiting.length === 0 && sv.inFlight.length === 0);
+sv = await survey([ticket('WAND-1', [], { description: 'tbd' })]);
+check('no brief: not waiting', sv.waiting.length === 0);
+sv = await survey([ticket('WAND-8583')], ['WAND-8583']);
+check('ignored ticket: not waiting', sv.waiting.length === 0);
+
+function world(issues, dispatchStatus = 204) {
+  const calls = [];
+  const f = async (url, init) => {
+    calls.push({ url, init });
+    if (url === 'https://api.linear.app/graphql') return { status: 200, json: async () => ({ data: { issues: { nodes: issues } } }) };
+    return { status: dispatchStatus };
+  };
+  f.calls = calls;
+  f.dispatches = () => calls.filter((c) => c.url.startsWith('https://api.github.com/'));
+  return f;
+}
+const AT = (minute) => Date.UTC(2026, 10, 4, 15, minute);
+let f = world([ticket('WAND-1')]);
+let out = await scheduled(AT(20), env, f);
+check('cron: waiting brief starts one live tick', f.dispatches().length === 1 && JSON.parse(f.dispatches()[0].init.body).inputs.mode === 'live');
+check('cron: reads Linear with the read key, bare', f.calls[0].init.headers.Authorization === 'lin_api_read');
+check('cron: says why', out.includes('new brief: WAND-1'));
+f = world([ticket('WAND-1', [`_design-run:WAND-1-${fp} · started_`])]);
+await scheduled(AT(20), env, f);
+check('cron: run in flight, not the hourly slot: no tick', f.dispatches().length === 0);
+await scheduled(AT(16), env, f);
+check('cron: run in flight at :16: one tick', f.dispatches().length === 1);
+f = world([]);
+await scheduled(AT(16), env, f);
+check('cron: nothing labeled: no tick, even hourly', f.dispatches().length === 0);
+f = world([ticket('WAND-1')]);
+await scheduled(AT(20), { ...env, RELAY_ENABLED: 'off' }, f);
+check('kill switch: no Linear read, no tick', f.calls.length === 0);
+await scheduled(AT(20), { ...env, RELAY_ENABLED: undefined }, f);
+check('kill switch unset counts as off', f.calls.length === 0);
+f = world([ticket('WAND-1')], 403);
+check('cron: refused dispatch throws so Cloudflare logs a failure', await scheduled(AT(20), env, f).then(() => false, () => true));
+f = world([ticket('WAND-1')]);
+r = await (async () => { const res = await handle(githubReq({ ref: 'refs/heads/claude/design-result-X' }), { ...env, RELAY_ENABLED: 'off' }, f, NOW); return { status: res.status, text: await res.text() }; })();
+check('kill switch: webhooks dispatch nothing', r.text === 'relay is off' && f.calls.length === 0);
 
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

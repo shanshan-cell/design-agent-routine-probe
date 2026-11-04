@@ -1,19 +1,17 @@
 name: Linear design bridge
 
 # One tick of bridge/bridge.py: post results the routine pushed back, report runs that never came back, and fire the
-# routine for allowlisted tickets that carry the ai-design label (Product team). Scheduled workflows always run the default
-# branch's code, so a result branch can never change what runs here.
-# The schedule is OFF unless the repo variable LINEAR_DESIGN_BRIDGE_ENABLED is 'true' (the job is skipped).
-# workflow_dispatch defaults to a dry run (reads Linear and GitHub, prints what it would do, writes nothing);
-# mode=live runs one normal tick, with the same allowlist, claim tags and dedupe as a scheduled one.
+# routine for open Product tickets that carry the ai-design label. Started by the Cloudflare relay (relay/worker.js)
+# with mode=live, never on a GitHub schedule. A dispatch always runs main's code, so a result branch can never change
+# what runs here.
+# Kill switch for paid runs: the routine is fired only when the repo variable DESIGN_BRIDGE_FIRING is "on".
+# A manual dispatch defaults to a dry run (reads Linear and GitHub, prints what it would do, writes nothing).
 
 on:
-  schedule:
-    - cron: '7-59/10 * * * *' # every 10 min, off the hour (GitHub drops top-of-hour ticks under load); runs as the last committer of this line, who must be a linked GitHub user
   workflow_dispatch:
     inputs:
       mode:
-        description: dry-run writes nothing; live runs one real tick (may fire the routine)
+        description: dry-run writes nothing; live runs one real tick (fires the routine only if DESIGN_BRIDGE_FIRING is on)
         type: choice
         options: [dry-run, live]
         default: dry-run
@@ -27,8 +25,6 @@ permissions:
 
 jobs:
   tick:
-    # The schedule needs the switch; a manual dispatch runs regardless (dry-run by default).
-    if: vars.LINEAR_DESIGN_BRIDGE_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -42,5 +38,6 @@ jobs:
           ROUTINE_FIRE_URL: ${{ secrets.ROUTINE_FIRE_URL }}
           ROUTINE_FIRE_TOKEN: ${{ secrets.ROUTINE_FIRE_TOKEN }}
           GH_TOKEN: ${{ github.token }}
-          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'live' && '--dry-run' || '' }}
+          DESIGN_BRIDGE_FIRING: ${{ vars.DESIGN_BRIDGE_FIRING }}
+          DRY: ${{ inputs.mode != 'live' && '--dry-run' || '' }}
         run: python3 -I bridge/bridge.py tick $DRY

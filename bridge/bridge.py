@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-# Linear -> Claude Code routine -> Linear bridge (V1). Runs from main on a GitHub Actions schedule; one tick does:
+# Linear -> Claude Code routine -> Linear bridge (V1). Runs from main when the relay (relay/worker.js) dispatches the
+# workflow; one tick does:
 #   1. collect: results the routine pushed to claude/design-result-<run_key> -> ONE comment on that run's ticket
 #   2. sweep:   runs that never reported back within result_timeout_minutes -> ONE "didn't finish" comment
-#   3. poll:    allowlisted tickets carrying the ai-design label -> claim the brief version, fire the routine
+#   3. poll:    open Product tickets carrying the ai-design label -> claim the brief version, fire the routine, post
+#               ONE "started" comment with the GitHub run and Claude session links
 #
 #   python3 -I bridge/bridge.py tick [--dry-run]
 #
 # Env: LINEAR_API_KEY (Linear OAuth app token, client credentials, scopes read + comments:create), ROUTINE_FIRE_URL,
-# ROUTINE_FIRE_TOKEN, GH_TOKEN (the workflow's GITHUB_TOKEN: contents write for claim tags), GITHUB_REPOSITORY.
+# ROUTINE_FIRE_TOKEN, GH_TOKEN (the workflow's GITHUB_TOKEN: contents write for claim tags), GITHUB_REPOSITORY,
+# DESIGN_BRIDGE_FIRING (kill switch: the routine is fired only when it is exactly "on").
 # Secrets are only ever sent as headers; nothing here prints a header, a token or a response body.
 #
-# Safety: tickets outside bridge/config.json allowed_tickets are never read, fired or commented on. The only Linear
-# mutation is commentCreate. A claim is an annotated tag design-claim/<run_key>, created atomically before the fire, so
+# Safety: only open tickets in the configured team that carry the ai-design label (by id) and were created by a full,
+# active workspace member are fired; ignore_tickets are never fired again. At most max_fires_per_day claims per 24 h
+# and max_in_flight unfinished runs. The only Linear mutation is commentCreate, and only on tickets of the configured
+# team. A claim is an annotated tag design-claim/<run_key>, created atomically before the fire, so
 # one brief version (title + description) is fired at most once, even when ticks overlap or a fire fails. A result
 # is accepted only from a branch whose single commit changes only results/<run_key>.json, for a run_key that was
 # claimed here, and the comment text is built here from validated fields (agent text has its links removed).
@@ -41,15 +46,21 @@ RUN_KEY = re.compile(r'^([A-Z][A-Z0-9]{1,9}-[0-9]{1,6})-([0-9a-f]{16})$')
 URL = re.compile(r'https?://\S+')
 CJK = re.compile(r'[぀-ヿ㐀-鿿가-힯]')
 
-ISSUE_QUERY = '''query DesignBridgeIssue($id: String!) {
-  issue(id: $id) {
-    id identifier title description url
+ISSUE_FIELDS = '''id identifier title description url
+    team { id }
     state { type }
     labels(first: 50) { nodes { id name } }
-    creator { id name }
-    comments(first: 100) { nodes { id body user { id } } }
-  }
-}'''
+    creator { id name url guest active }
+    comments(first: 100, filter: { body: { contains: "design-run:" } }) { nodes { id body user { id } } }'''
+ISSUE_QUERY = '''query DesignBridgeIssue($id: String!) {
+  issue(id: $id) { %s }
+}''' % ISSUE_FIELDS
+QUEUE_QUERY = '''query DesignBridgeQueue($team: ID!, $label: ID!) {
+  issues(first: 25, filter: { team: { id: { eq: $team } }, labels: { id: { eq: $label } },
+                              state: { type: { nin: ["completed", "canceled"] } } }) { nodes { %s } }
+}''' % ISSUE_FIELDS
+# Kinds of marker comment that end a run (no more comments for that run_key, except a late result after a timeout).
+DONE = ['result', 'timeout', 'fire-failed', 'not-started']
 COMMENT_CREATE = '''mutation DesignBridgeComment($issueId: String!, $body: String!) {
   commentCreate(input: { issueId: $issueId, body: $body }) { success comment { id url } }
 }'''
@@ -62,9 +73,9 @@ class BridgeError(Exception):
 def load_config(path=os.path.join(HERE, 'config.json')):
     with open(path) as f:
         cfg = json.load(f)
-    for t in cfg['allowed_tickets']:
+    for t in cfg['ignore_tickets']:
         if not TICKET.match(t):
-            raise BridgeError(f'bad ticket id in allowlist: {t!r}')
+            raise BridgeError(f'bad ticket id in ignore_tickets: {t!r}')
     return cfg
 
 
@@ -88,8 +99,10 @@ def has_marker(comments, key, kinds):
 
 def eligible(issue, cfg):
     """(True, '') when the ticket carries the trigger label (ai-design, by id) and has a brief; else (False, why)."""
-    if issue['identifier'] not in cfg['allowed_tickets']:
-        return False, 'not on the allowlist'
+    if (issue.get('team') or {}).get('id') != cfg['team']['id']:
+        return False, f'not a {cfg["team"]["name"]} ticket'
+    if issue['identifier'] in cfg['ignore_tickets']:
+        return False, 'on ignore_tickets'
     label = cfg['trigger_label']
     if label['id'] not in {l['id'] for l in (issue.get('labels') or {}).get('nodes', [])}:
         return False, f'no {label["name"]} label'
@@ -98,6 +111,26 @@ def eligible(issue, cfg):
     if len((issue.get('description') or '').strip()) < 40:
         return False, 'the description has no brief'
     return True, ''
+
+
+def requester_ok(issue):
+    """(True, '') when a full, active workspace member created the ticket; else (False, why) for the comment."""
+    who = issue.get('creator')
+    if not who:
+        return False, "the ticket has no human creator (it came from an integration)"
+    if who.get('guest') or not who.get('active', True):
+        return False, 'only full workspace members can request a design run'
+    return True, ''
+
+
+def reviewer_url(issue, cfg):
+    """The ticket's creator gets the review mention; the configured reviewer if the creator has no profile."""
+    return (issue.get('creator') or {}).get('url') or cfg['reviewer']['profile_url']
+
+
+def session_link(url):
+    """The fire API answers .../code/cse_<id>; the session opens at .../code/session_<id>."""
+    return re.sub(r'^(https://claude\.ai/code/)cse_', r'\1session_', url or '')
 
 
 def fire_text(issue, key):
@@ -130,8 +163,6 @@ def validate_result(doc, branch_key, cfg):
         errs.append('branch run key is malformed')
     elif doc.get('ticket') != m.group(1):
         errs.append('ticket does not match the run key')
-    if doc.get('ticket') not in cfg['allowed_tickets']:
-        errs.append('ticket is not on the allowlist')
     status = doc.get('status')
     if status not in ('ready', 'failed'):
         errs.append('status must be ready or failed')
@@ -154,7 +185,7 @@ def validate_result(doc, branch_key, cfg):
 
 
 def compose_result(doc, issue, cfg, session_url):
-    who = cfg['reviewer']['profile_url']
+    who = reviewer_url(issue, cfg)
     summary = clean_text(doc['summary'], 1200)
     lims = [clean_text(x, 300) for x in doc.get('limitations', []) if x.strip()]
     run = f' · [run log]({session_url})' if session_url else ''
@@ -182,13 +213,25 @@ def compose_timeout(issue, key, cfg, minutes, session_url):
     return '\n'.join([f"The design run for **{issue['title']}** hasn't reported back after {minutes} minutes, so "
                       "I'm treating it as not finished. No canvas is attached.", '',
                       'To retry, edit the brief (title or description).', '',
-                      f'{cfg["reviewer"]["profile_url"]} for a look.', '', f'_{marker(key, "timeout")}{run}_'])
+                      f'{reviewer_url(issue, cfg)} for a look.', '', f'_{marker(key, "timeout")}{run}_'])
 
 
 def compose_fire_failed(issue, key, cfg, why):
     return '\n'.join([f"I couldn't start the design run for **{issue['title']}** ({why}). No design was started.", '',
                       'To retry, edit the brief (title or description).', '',
-                      f'{cfg["reviewer"]["profile_url"]} for a look.', '', f'_{marker(key, "fire-failed")}_'])
+                      f'{reviewer_url(issue, cfg)} for a look.', '', f'_{marker(key, "fire-failed")}_'])
+
+
+def compose_started(issue, key, fired, run_url):
+    links = ' · '.join(x for x in [f'[GitHub run]({run_url})' if run_url else '',
+                                   f'[Claude session]({fired["session_url"]})'] if x)
+    return '\n'.join([f'Design run started for **{issue["title"]}**. The canvas will be posted here when it\'s ready, '
+                      'usually in 20 to 40 minutes.', '', links, '', f'_{marker(key, "started")}_'])
+
+
+def compose_not_started(issue, key, why, retry):
+    return '\n'.join([f"I didn't start a design run for **{issue['title']}**: {why}.", '', retry, '',
+                      f'_{marker(key, "not-started")}_'])
 
 
 # ---- transports ----
@@ -222,6 +265,10 @@ class Linear:
             raise BridgeError(f'Linear HTTP {status} {msg[:120]}')
         return body['data']
 
+    def queue(self, cfg):
+        """Open tickets of the configured team with the trigger label (by id)."""
+        return self._call(QUEUE_QUERY, {'team': cfg['team']['id'], 'label': cfg['trigger_label']['id']})['issues']['nodes']
+
     def issue(self, ticket):
         issue = self._call(ISSUE_QUERY, {'id': ticket})['issue']
         if not issue or issue['identifier'] != ticket:
@@ -229,8 +276,8 @@ class Linear:
         return issue
 
     def comment(self, issue, body, cfg):
-        if issue['identifier'] not in cfg['allowed_tickets']:
-            raise BridgeError(f'refusing to comment on {issue["identifier"]}: not on the allowlist')
+        if (issue.get('team') or {}).get('id') != cfg['team']['id']:
+            raise BridgeError(f'refusing to comment on {issue["identifier"]}: not a {cfg["team"]["name"]} ticket')
         if self.dry:
             print(f'[dry-run] would comment on {issue["identifier"]}:\n{body}\n')
             return 'dry-run'
@@ -245,6 +292,7 @@ class GitHub:
         self.h = {'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json',
                   'X-GitHub-Api-Version': '2022-11-28'}
         self.repo, self.dry = repo, dry
+        self._tags = {}  # annotated tags never change, so a found one is read once per tick
 
     def get(self, path):
         return http('GET', f'{GITHUB_API}/repos/{self.repo}/{path}', self.h)
@@ -257,6 +305,8 @@ class GitHub:
 
     def tag(self, name):
         """{'message': dict, 'date': epoch} for an annotated tag, or None."""
+        if name in self._tags:
+            return self._tags[name]
         status, ref = self.get(f'git/ref/tags/{name}')
         if status == 404:
             return None
@@ -269,7 +319,8 @@ class GitHub:
             msg = json.loads(t['message'])
         except Exception:
             msg = {}
-        return {'message': msg, 'date': calendar.timegm(time.strptime(t['tagger']['date'], '%Y-%m-%dT%H:%M:%SZ'))}
+        self._tags[name] = {'message': msg, 'date': calendar.timegm(time.strptime(t['tagger']['date'], '%Y-%m-%dT%H:%M:%SZ'))}
+        return self._tags[name]
 
     def create_tag(self, name, message):
         """True if created; False if it already exists (the claim belongs to someone else)."""
@@ -313,28 +364,51 @@ def fire(url, token, text):
     if status != 200 or not body or body.get('type') != 'routine_fire':
         err = ((body or {}).get('error') or {}).get('type', 'no error type')
         raise BridgeError(f'routine fire HTTP {status} ({err})')
-    return {'session_id': body['claude_code_session_id'], 'session_url': body['claude_code_session_url']}
+    return {'session_id': body['claude_code_session_id'], 'session_url': session_link(body['claude_code_session_url'])}
 
 
 # ---- the tick ----
 
 def session_url(gh, key):
     t = gh.tag(FIRED + key)
-    return (t or {}).get('message', {}).get('session_url')
+    return session_link((t or {}).get('message', {}).get('session_url'))
 
 
-def collect(cfg, lin, gh):
+class Issues:
+    """Linear issues read at most once per tick."""
+
+    def __init__(self, lin):
+        self.lin, self.seen = lin, {}
+
+    def get(self, ticket):
+        if ticket not in self.seen:
+            self.seen[ticket] = self.lin.issue(ticket)
+        return self.seen[ticket]
+
+
+def claims(gh):
+    """[(run_key, claimed_at epoch)] for every claim tag."""
+    out = []
+    for ref in gh.refs('tags/' + CLAIM):
+        key = ref[len('refs/tags/' + CLAIM):]
+        t = gh.tag(CLAIM + key) if RUN_KEY.match(key) else None
+        if t:
+            out.append((key, t['date']))
+    return out
+
+
+def collect(cfg, lin, gh, issues):
     for ref in gh.refs('heads/' + cfg['result_branch_prefix']):
         branch = ref[len('refs/heads/'):]
         key = branch[len(cfg['result_branch_prefix']):]
         m = RUN_KEY.match(key)
-        if not m or m.group(1) not in cfg['allowed_tickets']:
-            print(f'collect: ignoring {branch} (not an allowlisted run key)')
+        if not m:
+            print(f'collect: ignoring {branch} (not a run key)')
             continue
         if not gh.tag(CLAIM + key):
             print(f'collect: ignoring {branch} (no claim: this bridge never started {key})')
             continue
-        issue = lin.issue(m.group(1))
+        issue = issues.get(m.group(1))
         if has_marker(issue['comments']['nodes'], key, ['result']):
             print(f'collect: {key} already delivered')
             continue
@@ -351,36 +425,67 @@ def collect(cfg, lin, gh):
         print(f'collect: {key} {doc["status"]} -> {url}')
 
 
-def sweep(cfg, lin, gh, now):
+def sweep(cfg, lin, gh, issues, now):
     limit = cfg['result_timeout_minutes']
-    for ticket in cfg['allowed_tickets']:
-        claims = [r[len('refs/tags/' + CLAIM):] for r in gh.refs(f'tags/{CLAIM}{ticket}-')]
-        if not claims:
+    for key, claimed in claims(gh):
+        # Runs older than a day past the limit were swept by an earlier tick; don't re-read their tickets forever.
+        if not limit * 60 < now - claimed < (limit + 24 * 60) * 60:
             continue
-        issue = lin.issue(ticket)
-        for key in claims:
-            if has_marker(issue['comments']['nodes'], key, ['result', 'timeout', 'fire-failed']):
-                continue
-            claim = gh.tag(CLAIM + key)
-            if claim and now - claim['date'] > limit * 60:
-                url = lin.comment(issue, compose_timeout(issue, key, cfg, limit, session_url(gh, key)), cfg)
-                print(f'sweep: {key} timed out -> {url}')
+        issue = issues.get(RUN_KEY.match(key).group(1))
+        if has_marker(issue['comments']['nodes'], key, DONE):
+            continue
+        url = lin.comment(issue, compose_timeout(issue, key, cfg, limit, session_url(gh, key)), cfg)
+        print(f'sweep: {key} timed out -> {url}')
 
 
-def poll(cfg, lin, gh, fire_url, fire_token):
-    for ticket in cfg['allowed_tickets']:
-        issue = lin.issue(ticket)
+def usage(cfg, gh, issues, now):
+    """(claims in the last 24 h, runs still in flight)."""
+    today = in_flight = 0
+    for key, claimed in claims(gh):
+        age = now - claimed
+        today += age < 24 * 3600
+        if age < cfg['result_timeout_minutes'] * 60:
+            issue = issues.get(RUN_KEY.match(key).group(1))
+            in_flight += not has_marker(issue['comments']['nodes'], key, DONE)
+    return today, in_flight
+
+
+def poll(cfg, lin, gh, issues, fire_url, fire_token, firing, run_url, now):
+    used = None
+    for issue in lin.queue(cfg):
+        ticket = issue['identifier']
+        issues.seen[ticket] = issue
         ok, why = eligible(issue, cfg)
         if not ok:
             print(f'poll: {ticket} not queued ({why})')
             continue
         key = run_key(ticket, fingerprint(issue['title'], issue['description']))
-        if has_marker(issue['comments']['nodes'], key, ['result', 'timeout', 'fire-failed']) or gh.tag(CLAIM + key):
+        if has_marker(issue['comments']['nodes'], key, DONE + ['started']) or gh.tag(CLAIM + key):
             print(f'poll: {ticket} brief version {key} was already run')
+            continue
+        if not firing and not gh.dry:
+            print(f'poll: {key} is waiting; firing is off (repo variable DESIGN_BRIDGE_FIRING is not "on")')
+            continue
+        ok, why = requester_ok(issue)
+        if not ok:
+            lin.comment(issue, compose_not_started(issue, key, why, 'Ask a full workspace member to create the ticket.'), cfg)
+            print(f'poll: {key} not started ({why})')
+            continue
+        used = used or list(usage(cfg, gh, issues, now))
+        if used[1] >= cfg['max_in_flight']:
+            print(f'poll: {key} waits: {used[1]} runs in flight (max {cfg["max_in_flight"]})')
+            continue
+        if used[0] >= cfg['max_fires_per_day']:
+            lin.comment(issue, compose_not_started(
+                issue, key, f'the daily limit of {cfg["max_fires_per_day"]} design runs is used up',
+                'To retry later, edit the brief (title or description).'), cfg)
+            print(f'poll: {key} not started (daily limit)')
             continue
         if not gh.create_tag(CLAIM + key, {'ticket': ticket, 'claimed_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}):
             print(f'poll: {key} was claimed by another tick')
             continue
+        used[0] += 1
+        used[1] += 1
         if gh.dry:
             print(f'[dry-run] would fire the routine for {key} with {len(fire_text(issue, key))} chars of brief')
             continue
@@ -391,7 +496,8 @@ def poll(cfg, lin, gh, fire_url, fire_token):
             lin.comment(issue, compose_fire_failed(issue, key, cfg, str(e)), cfg)
             continue
         gh.create_tag(FIRED + key, fired)
-        print(f'poll: fired {key} -> {fired["session_id"]}')
+        print(f'poll: fired {key} -> {fired["session_url"]}')
+        print(f'poll: started comment -> {lin.comment(issue, compose_started(issue, key, fired, run_url), cfg)}')
 
 
 def main(argv):
@@ -400,18 +506,21 @@ def main(argv):
         return 2
     dry = '--dry-run' in argv
     cfg = load_config()
-    if not cfg['allowed_tickets']:
-        print('No allowlisted tickets; nothing to do.')
-        return 0
     env = os.environ
-    for k in ('LINEAR_API_KEY', 'GH_TOKEN', 'GITHUB_REPOSITORY') + (() if dry else ('ROUTINE_FIRE_URL', 'ROUTINE_FIRE_TOKEN')):
+    firing = env.get('DESIGN_BRIDGE_FIRING', '').strip() == 'on'
+    for k in ('LINEAR_API_KEY', 'GH_TOKEN', 'GITHUB_REPOSITORY') + (('ROUTINE_FIRE_URL', 'ROUTINE_FIRE_TOKEN') if firing and not dry else ()):
         if not env.get(k, '').strip():
             raise BridgeError(f'{k} is not set')
     lin = Linear(env['LINEAR_API_KEY'].strip(), dry)
     gh = GitHub(env['GH_TOKEN'].strip(), env['GITHUB_REPOSITORY'], dry)
+    issues = Issues(lin)
+    run_url = (f'{env["GITHUB_SERVER_URL"]}/{env["GITHUB_REPOSITORY"]}/actions/runs/{env["GITHUB_RUN_ID"]}'
+               if env.get('GITHUB_SERVER_URL') and env.get('GITHUB_RUN_ID') else None)
+    print(f'firing is {"on" if firing else "off"}')
     failed = False
-    for step in (lambda: collect(cfg, lin, gh), lambda: sweep(cfg, lin, gh, time.time()),
-                 lambda: poll(cfg, lin, gh, env.get('ROUTINE_FIRE_URL'), env.get('ROUTINE_FIRE_TOKEN'))):
+    for step in (lambda: collect(cfg, lin, gh, issues), lambda: sweep(cfg, lin, gh, issues, time.time()),
+                 lambda: poll(cfg, lin, gh, issues, env.get('ROUTINE_FIRE_URL'), env.get('ROUTINE_FIRE_TOKEN'),
+                              firing, run_url, time.time())):
         try:
             step()
         except BridgeError as e:  # one failing step never stops the others
