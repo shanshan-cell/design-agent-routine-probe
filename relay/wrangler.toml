@@ -1,0 +1,11 @@
+# Cloudflare Worker for relay/worker.js. Not deployed until approved. Secrets are set with
+# `wrangler secret put LINEAR_WEBHOOK_SECRET` / `GITHUB_WEBHOOK_SECRET` / `GITHUB_DISPATCH_TOKEN`, never in this file.
+name = "wemod-design-bridge-relay"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+REPO = "shanshan-cell/design-agent-routine-probe"
+WORKFLOW = "linear-design-bridge.yml"
+AI_DESIGN_LABEL_ID = "56a3977a-dd58-4cec-a0aa-9522df1f27fb" # ai-design, Product team
+TEAM_ID = "3b01e73d-6636-4ff9-9f8a-c758f4d806ef"            # Product (WAND)
