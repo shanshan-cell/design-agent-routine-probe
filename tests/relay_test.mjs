@@ -1,7 +1,7 @@
 // Offline tests for relay/worker.js: signed and unsigned deliveries, label transitions, result pushes.
 //   node tests/relay_test.mjs
 import { createHmac } from 'node:crypto';
-import { handle } from '../relay/worker.js';
+import { handle, scheduled } from '../relay/worker.js';
 
 const env = {
   LINEAR_WEBHOOK_SECRET: 'lin-secret', GITHUB_WEBHOOK_SECRET: 'gh-secret', GITHUB_DISPATCH_TOKEN: 'ghp_test',
@@ -81,6 +81,12 @@ r = await run(new Request('https://relay.example/linear', { method: 'GET' }));
 check('GET: 404', r.status === 404);
 r = await run(new Request('https://relay.example/other', { method: 'POST', body: '{}' }));
 check('unknown path: 404', r.status === 404);
+
+let f = fakeFetch();
+await scheduled(env, f);
+check('hourly cron: one live dispatch on main', f.calls.length === 1 && JSON.parse(f.calls[0].init.body).inputs.mode === 'live');
+f = fakeFetch(403);
+check('hourly cron: refused dispatch throws so Cloudflare logs a failure', await scheduled(env, f).then(() => false, () => true));
 
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

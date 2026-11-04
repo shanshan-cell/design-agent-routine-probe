@@ -4,6 +4,9 @@ name = "wemod-design-bridge-relay"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
+[triggers]
+crons = ["17 * * * *"] # hourly tick for timeouts; duplicates are harmless (claim tags, one comment per run)
+
 [vars]
 REPO = "shanshan-cell/design-agent-routine-probe"
 WORKFLOW = "linear-design-bridge.yml"

@@ -5,6 +5,7 @@
 //
 //   POST /linear  Linear webhook (Issue events, Product team). Starts a tick when ai-design is newly on an issue.
 //   POST /github  GitHub repository webhook (push). Starts a tick when the routine pushes claude/design-result-*.
+//   cron :17      Cloudflare Cron Trigger, hourly. Starts a tick so timeouts are reported without any webhook event.
 //
 // Both routes verify the sender's HMAC-SHA256 signature over the raw body; Linear deliveries older than 60 s are
 // refused (replay). Anything else gets 2xx with "ignored" so the sender doesn't retry, or 401 for a bad signature.
@@ -86,4 +87,13 @@ export async function handle(request, env, fetchImpl = fetch, now = Date.now()) 
     ? new Response('tick started') : new Response('dispatch failed', { status: 502 });
 }
 
-export default { fetch: (request, env) => handle(request, env) };
+/** Hourly Cron Trigger: one tick, so runs that never came back get their timeout comment without waiting for a webhook.
+ *  Safe to repeat: the bridge fires a brief version at most once (claim tags) and posts one comment per run. */
+export async function scheduled(env, fetchImpl = fetch) {
+  if (!(await dispatch(env, 'hourly cron', fetchImpl))) throw new Error('dispatch failed');
+}
+
+export default {
+  fetch: (request, env) => handle(request, env),
+  scheduled: (controller, env) => scheduled(env),
+};
