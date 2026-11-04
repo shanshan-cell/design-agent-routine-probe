@@ -1,0 +1,19 @@
+{
+  "contract": "wemod-design-result/v1",
+  "ticket": "WAND-8583",
+  "run_key": "WAND-8583-f7224aab3565022d",
+  "status": "ready",
+  "canvas_url": "https://claude.ai/artifact/MErj5Bwvfe5MFxtdqBRWp8",
+  "canvas_title": "WAND-8583 - Game Discovery - Design exploration",
+  "summary": "I designed one first-round exploration of a WeMod game discovery page, direction \"Spotlight\": search first, set beside a wall of real game art, then a Top games picker that shows each game's cheat count and links to its page, a section explaining that every game page lists its mods by group, a browse shelf with an A\u2013Z list, and three how-it-works steps that end on the download. On desktop (Windows) the download sits beside the search and again in step 1. On phone (not Windows) there is no download anywhere: the page ends with \"...or visit us on your PC to download the app\" and a \"Browse all games\" button. An independent AI review rejected this round (product 58, visual 59), so treat it as a starting point for a second round, not a design to take forward.",
+  "limitations": [
+    "Independent AI review (renders only): Product 58/100, Visual 59/100, status Reject; the reviewer's alignment pass was not run (follow-up message blocked by the guard). Readiness: Blocked.",
+    "Top fixes for round 2: a stronger desktop download path, show real mods beside a game (only RDR2 has verified mod names, and its media are not approved), stop repeating the same games across sections, and replace the table-like top-games rows and the empty step cards.",
+    "SEO: a new H1 and crawlable game links on a game-list page carry seo_risk high and need Growth sign-off; the metric owner is unknown and no traffic, search or device data was used.",
+    "Search, the art wall and the top-games picker are Proposed or provisional patterns: there is no production game-list page save (R93), and the brand-page phone action is undecided (R115).",
+    "Placing \"WeMod by Wand\" above the footer is a decision for the design owner; the brief's request to post to Linear and ask for review is left to the bridge.",
+    "Only one of three written narratives was built; the canvas check passed with layout hints (dead zones; HomeSection measured 1024 against the 960 the check expects)."
+  ],
+  "session_id": "cse_01BLdKrqcCoigt1NU7SjmE63",
+  "reported_at": "2026-11-04T00:29:22Z"
+}
