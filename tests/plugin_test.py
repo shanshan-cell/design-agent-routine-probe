@@ -41,5 +41,8 @@ check('secret names fit the bridge', bridge.SECRET_NAME.match(add_designer.secre
 check('the token shape matches a real routine token', add_designer.TOKEN.match('sk-ant-oat01-' + 'a' * 80) is not None
       and not add_designer.TOKEN.match('sk-ant-api03-' + 'a' * 80))
 check('the skill never runs the routine', '"run"' not in skill.replace('{action: "run"}', ''))
+wf = open(add_designer.WORKFLOW).read()
+check('the workflow passes token secrets by name only', 'toJSON(secrets)' not in wf and add_designer.BEGIN in wf
+      and add_designer.END in wf and 'ROUTINE_FIRE_TOKEN: ${{ secrets.ROUTINE_FIRE_TOKEN }}' in wf)
 print(f'{passed} passed, {failed} failed')
 sys.exit(1 if failed else 0)

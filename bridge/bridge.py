@@ -8,8 +8,8 @@
 #
 #   python3 -I bridge/bridge.py tick [--dry-run]
 #
-# Env: LINEAR_API_KEY (Linear OAuth app token, client credentials, scopes read + comments:create), ROUTINE_TOKENS
-# (JSON object of repository secrets; only the ROUTINE_* names that bridge/designers.json points at are used),
+# Env: LINEAR_API_KEY (Linear OAuth app token, client credentials, scopes read + comments:create), one ROUTINE_*
+# variable per teammate's routine token (the secret names bridge/designers.json points at),
 # GH_TOKEN (the workflow's GITHUB_TOKEN: contents write for claim tags), GITHUB_REPOSITORY,
 # DESIGN_BRIDGE_FIRING (kill switch: a routine is fired only when it is exactly "on").
 #
@@ -592,9 +592,7 @@ def main(argv):
     for k in ('LINEAR_API_KEY', 'GH_TOKEN', 'GITHUB_REPOSITORY'):
         if not env.get(k, '').strip():
             raise BridgeError(f'{k} is not set')
-    secrets = json.loads(env.get('ROUTINE_TOKENS') or '{}')
-    tokens = {d['token_secret']: secrets.get(d['token_secret'], '') for d in designers.values()}
-    del secrets
+    tokens = {d['token_secret']: env.get(d['token_secret'], '') for d in designers.values()}
     lin = Linear(env['LINEAR_API_KEY'].strip(), dry)
     gh = GitHub(env['GH_TOKEN'].strip(), env['GITHUB_REPOSITORY'], dry)
     issues = Issues(lin)

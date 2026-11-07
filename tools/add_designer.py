@@ -7,7 +7,7 @@
 #   python3 tools/add_designer.py add --email name@wemod.com --name "Name" --fire-url https://api.anthropic.com/...
 #       Copy their routine token from 1Password to the clipboard first. Stores it as the repository secret
 #       ROUTINE_TOKEN_<NAME> (straight from the clipboard to gh; it is never printed), adds them to
-#       bridge/designers.json, and commits and pushes that file to main.
+#       bridge/designers.json and the workflow's env, and commits and pushes both to main.
 #   python3 tools/add_designer.py remove --email name@wemod.com
 #       Removes them from bridge/designers.json and deletes their secret. Their routine stays in their account.
 import argparse
@@ -37,10 +37,23 @@ def secret_name(email):
     return 'ROUTINE_TOKEN_' + re.sub(r'[^A-Z0-9]+', '_', email.split('@')[0].upper()).strip('_')
 
 
+WORKFLOW = os.path.join(ROOT, '.github', 'workflows', 'linear-design-bridge.yml')
+BEGIN, END = '          # routine-tokens: begin\n', '          # routine-tokens: end\n'
+
+
 def save(doc, message):
     with open(DESIGNERS, 'w') as f:
         f.write(json.dumps(doc, indent=2) + '\n')
-    run('git', 'add', 'bridge/designers.json')
+    # The workflow passes each token secret by name (GitHub has no "all secrets matching" form worth using).
+    with open(WORKFLOW) as f:
+        wf = f.read()
+    head, rest = wf.split(BEGIN, 1)
+    tail = rest.split(END, 1)[1]
+    names = sorted({d['token_secret'] for d in doc['designers'].values()})
+    lines = ''.join(f'          {n}: ${{{{ secrets.{n} }}}}\n' for n in names)
+    with open(WORKFLOW, 'w') as f:
+        f.write(head + BEGIN + lines + END + tail)
+    run('git', 'add', 'bridge/designers.json', '.github/workflows/linear-design-bridge.yml')
     run('git', 'commit', '-q', '-m', message)
     run('git', 'push', '-q', 'origin', 'HEAD:main')
 

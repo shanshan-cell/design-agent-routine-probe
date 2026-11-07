@@ -35,9 +35,10 @@ jobs:
       - name: Bridge tick
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          # Every teammate's routine token is its own repository secret (ROUTINE_*, named in bridge/designers.json);
-          # the bridge keeps only those names from this object.
-          ROUTINE_TOKENS: ${{ toJSON(secrets) }}
+          # One routine token per teammate (bridge/designers.json names the secret). tools/add_designer.py adds a line.
+          # routine-tokens: begin
+          ROUTINE_FIRE_TOKEN: ${{ secrets.ROUTINE_FIRE_TOKEN }}
+          # routine-tokens: end
           GH_TOKEN: ${{ github.token }}
           DESIGN_BRIDGE_FIRING: ${{ vars.DESIGN_BRIDGE_FIRING }}
           DRY: ${{ inputs.mode != 'live' && '--dry-run' || '' }}
