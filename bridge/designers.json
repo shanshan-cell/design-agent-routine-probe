@@ -1,0 +1,10 @@
+{
+  "about": "One entry per teammate whose own Claude routine runs their ai-design tickets. Key = Linear email. token_secret = the repository secret holding that routine's API token. Added with tools/add_designer.py.",
+  "designers": {
+    "shanshan@wemod.com": {
+      "name": "Shanshan",
+      "fire_url": "https://api.anthropic.com/v1/claude_code/routines/trig_01A28vLy72Mk2rYGzJatnfLg/fire",
+      "token_secret": "ROUTINE_FIRE_TOKEN"
+    }
+  }
+}

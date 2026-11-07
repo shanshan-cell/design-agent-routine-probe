@@ -1,11 +1,12 @@
 {
   "linear_workspace": "wemod",
-  "team": { "id": "3b01e73d-6636-4ff9-9f8a-c758f4d806ef", "key": "WAND", "name": "Product" },
-  "trigger_label": { "id": "56a3977a-dd58-4cec-a0aa-9522df1f27fb", "name": "ai-design", "team": "WAND" },
+  "team": {"id": "3b01e73d-6636-4ff9-9f8a-c758f4d806ef", "key": "WAND", "name": "Product"},
+  "trigger_label": {"id": "56a3977a-dd58-4cec-a0aa-9522df1f27fb", "name": "ai-design", "team": "WAND"},
   "ignore_tickets": ["WAND-8583", "WAND-8363"],
-  "reviewer": { "id": "58a0b37f-c20b-4705-b20a-c041a482a3cb", "name": "Shanshan", "profile_url": "https://linear.app/wemod/profiles/shanshan" },
-  "max_fires_per_day": 5,
-  "max_in_flight": 2,
+  "reviewer": {"id": "58a0b37f-c20b-4705-b20a-c041a482a3cb", "name": "Shanshan", "profile_url": "https://linear.app/wemod/profiles/shanshan"},
+  "max_fires_per_day": 10,
+  "max_in_flight": 3,
   "result_timeout_minutes": 120,
-  "result_branch_prefix": "claude/design-result-"
+  "result_branch_prefix": "claude/design-result-",
+  "max_fires_per_person_per_day": 3
 }

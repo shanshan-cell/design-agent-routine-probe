@@ -8,14 +8,20 @@
 #
 #   python3 -I bridge/bridge.py tick [--dry-run]
 #
-# Env: LINEAR_API_KEY (Linear OAuth app token, client credentials, scopes read + comments:create), ROUTINE_FIRE_URL,
-# ROUTINE_FIRE_TOKEN, GH_TOKEN (the workflow's GITHUB_TOKEN: contents write for claim tags), GITHUB_REPOSITORY,
-# DESIGN_BRIDGE_FIRING (kill switch: the routine is fired only when it is exactly "on").
+# Env: LINEAR_API_KEY (Linear OAuth app token, client credentials, scopes read + comments:create), ROUTINE_TOKENS
+# (JSON object of repository secrets; only the ROUTINE_* names that bridge/designers.json points at are used),
+# GH_TOKEN (the workflow's GITHUB_TOKEN: contents write for claim tags), GITHUB_REPOSITORY,
+# DESIGN_BRIDGE_FIRING (kill switch: a routine is fired only when it is exactly "on").
+#
+# Each teammate has their own routine in their own Claude account (set up with the wemod-design-routine plugin), so
+# the canvas is theirs. bridge/designers.json maps a Linear email to that routine's fire URL and the name of the
+# repository secret holding its token. The requester is whoever added the ai-design label (else the ticket creator);
+# a requester without a routine gets one "needs-setup" comment, and the run starts on a later tick once they're added.
 # Secrets are only ever sent as headers; nothing here prints a header, a token or a response body.
 #
-# Safety: only open tickets in the configured team that carry the ai-design label (by id) and were created by a full,
+# Safety: only open tickets in the configured team that carry the ai-design label (by id) and were requested by a full,
 # active workspace member are fired; ignore_tickets are never fired again. At most max_fires_per_day claims per 24 h
-# and max_in_flight unfinished runs. The only Linear mutation is commentCreate, and only on tickets of the configured
+# (max_fires_per_person_per_day for one requester) and max_in_flight unfinished runs. The only Linear mutation is commentCreate, and only on tickets of the configured
 # team. A claim is an annotated tag design-claim/<run_key>, created atomically before the fire, so
 # one brief version (title + description) is fired at most once, even when ticks overlap or a fire fails. A result
 # is accepted only from a branch whose single commit changes only results/<run_key>.json, for a run_key that was
@@ -41,6 +47,9 @@ CANVAS = re.compile(r'^https://claude\.ai/artifact/[A-Za-z0-9]{10,40}$')
 # Never a result canvas: V0, the Design type, the Test B and Test C baselines, Test B's empty first canvas.
 NOT_RESULT = {'KE3kJTKgBbXwSgvaaJkrLE', 'QKN21svewxgyPb6SYRqWnd', '6fgFWVXxWpzfaBSzKXFqNX', 'HsTPER1L2A6ctC87FrquQs',
               '5nhZgCLcSgKcpt2gKSSFuJ'}
+FIRE_URL = re.compile(r'^https://api\.anthropic\.com/v1/claude_code/routines/trig_[A-Za-z0-9]+/fire$')
+SECRET_NAME = re.compile(r'^ROUTINE_[A-Z0-9_]{1,60}$')
+SETUP_DAYS = 7  # a needs-setup ticket is retried hourly (relay) for this long
 TICKET = re.compile(r'^[A-Z][A-Z0-9]{1,9}-[0-9]{1,6}$')
 RUN_KEY = re.compile(r'^([A-Z][A-Z0-9]{1,9}-[0-9]{1,6})-([0-9a-f]{16})$')
 URL = re.compile(r'https?://\S+')
@@ -50,8 +59,9 @@ ISSUE_FIELDS = '''id identifier title description url
     team { id }
     state { type }
     labels(first: 50) { nodes { id name } }
-    creator { id name url guest active }
-    comments(first: 100, filter: { body: { contains: "design-run:" } }) { nodes { id body user { id } } }'''
+    creator { id name email url guest active }
+    history(first: 100) { nodes { createdAt addedLabelIds actor { id name email url guest active } } }
+    comments(first: 100, filter: { body: { contains: "design-run:" } }) { nodes { id body createdAt user { id } } }'''
 ISSUE_QUERY = '''query DesignBridgeIssue($id: String!) {
   issue(id: $id) { %s }
 }''' % ISSUE_FIELDS
@@ -77,6 +87,18 @@ def load_config(path=os.path.join(HERE, 'config.json')):
         if not TICKET.match(t):
             raise BridgeError(f'bad ticket id in ignore_tickets: {t!r}')
     return cfg
+
+
+def load_designers(path=os.path.join(HERE, 'designers.json')):
+    """{lowercase Linear email: {'name', 'fire_url', 'token_secret'}}."""
+    with open(path) as f:
+        designers = json.load(f)['designers']
+    out = {}
+    for email, d in designers.items():
+        if not FIRE_URL.match(d.get('fire_url', '')) or not SECRET_NAME.match(d.get('token_secret', '')):
+            raise BridgeError(f'bad designers.json entry for {email!r}')
+        out[email.strip().lower()] = d
+    return out
 
 
 # ---- pure contract logic (tested in tests/bridge_test.py) ----
@@ -113,9 +135,18 @@ def eligible(issue, cfg):
     return True, ''
 
 
-def requester_ok(issue):
-    """(True, '') when a full, active workspace member created the ticket; else (False, why) for the comment."""
-    who = issue.get('creator')
+def requester(issue, cfg):
+    """Who asked for the design: the person who last added the trigger label, else the ticket's creator."""
+    adds = [h for h in (issue.get('history') or {}).get('nodes', [])
+            if h.get('actor') and cfg['trigger_label']['id'] in (h.get('addedLabelIds') or [])]
+    if adds:
+        return max(adds, key=lambda h: h.get('createdAt') or '')['actor']
+    return issue.get('creator')
+
+
+def requester_ok(issue, cfg):
+    """(True, '') when a full, active workspace member asked for the run; else (False, why) for the comment."""
+    who = requester(issue, cfg)
     if not who:
         return False, "the ticket has no human creator (it came from an integration)"
     if who.get('guest') or not who.get('active', True):
@@ -124,8 +155,18 @@ def requester_ok(issue):
 
 
 def reviewer_url(issue, cfg):
-    """The ticket's creator gets the review mention; the configured reviewer if the creator has no profile."""
-    return (issue.get('creator') or {}).get('url') or cfg['reviewer']['profile_url']
+    """The requester gets the review mention; the configured reviewer if they have no profile."""
+    return (requester(issue, cfg) or {}).get('url') or cfg['reviewer']['profile_url']
+
+
+def routine_for(issue, cfg, designers):
+    """The requester's designers.json entry, or None when they have no routine set up yet."""
+    return designers.get(((requester(issue, cfg) or {}).get('email') or '').strip().lower())
+
+
+def iso_epoch(s):
+    """Epoch seconds for a Linear timestamp (2026-11-06T12:00:00.000Z); 0 when missing."""
+    return calendar.timegm(time.strptime(s[:19], '%Y-%m-%dT%H:%M:%S')) if s else 0
 
 
 def session_link(url):
@@ -133,10 +174,10 @@ def session_link(url):
     return re.sub(r'^(https://claude\.ai/code/)cse_', r'\1session_', url or '')
 
 
-def fire_text(issue, key):
+def fire_text(issue, key, cfg):
     desc = issue.get('description') or ''
     head = (f'Linear design brief\nticket: {issue["identifier"]}\nrun_key: {key}\ntitle: {issue["title"]}\n'
-            f'url: {issue["url"]}\nrequested_by: {(issue.get("creator") or {}).get("name", "unknown")}\n'
+            f'url: {issue["url"]}\nrequested_by: {(requester(issue, cfg) or {}).get("name", "unknown")}\n'
             f'--- description (the brief) ---\n')
     return head + desc[:60000 - len(head)]
 
@@ -227,6 +268,15 @@ def compose_started(issue, key, fired, run_url):
                                    f'[Claude session]({fired["session_url"]})'] if x)
     return '\n'.join([f'Design run started for **{issue["title"]}**. The canvas will be posted here when it\'s ready, '
                       'usually in 20 to 40 minutes.', '', links, '', f'_{marker(key, "started")}_'])
+
+
+def compose_needs_setup(issue, key, cfg):
+    who = requester(issue, cfg) or {}
+    return '\n'.join([f"Design runs use the requester's own Claude account, and {who.get('name', 'yours')} isn't set up "
+                      'yet, so nothing has started.', '',
+                      f'To get set up (about 10 minutes, once), ask {cfg["reviewer"]["name"]} for an invite to the '
+                      'design routine. Once you\'re added, this ticket starts by itself within an hour. You don\'t '
+                      f'need to change it. It waits {SETUP_DAYS} days.', '', f'_{marker(key, "needs-setup")}_'])
 
 
 def compose_not_started(issue, key, why, retry):
@@ -357,8 +407,8 @@ class GitHub:
 
 
 def fire(url, token, text):
-    if not re.match(r'^https://api\.anthropic\.com/v1/claude_code/routines/trig_[A-Za-z0-9]+/fire$', url or ''):
-        raise BridgeError('ROUTINE_FIRE_URL is not a routine fire URL')
+    if not FIRE_URL.match(url or ''):
+        raise BridgeError('not a routine fire URL')
     status, body = http('POST', url, {'Authorization': f'Bearer {token}', 'anthropic-version': '2026-10-21'},
                         {'text': text}, timeout=60)
     if status != 200 or not body or body.get('type') != 'routine_fire':
@@ -439,18 +489,23 @@ def sweep(cfg, lin, gh, issues, now):
 
 
 def usage(cfg, gh, issues, now):
-    """(claims in the last 24 h, runs still in flight)."""
+    """(claims in the last 24 h, runs still in flight, {requester email: claims in the last 24 h})."""
     today = in_flight = 0
+    per_person = {}
     for key, claimed in claims(gh):
         age = now - claimed
         today += age < 24 * 3600
+        if age < 24 * 3600:
+            who = gh.tag(CLAIM + key)['message'].get('requester')
+            if who:
+                per_person[who] = per_person.get(who, 0) + 1
         if age < cfg['result_timeout_minutes'] * 60:
             issue = issues.get(RUN_KEY.match(key).group(1))
             in_flight += not has_marker(issue['comments']['nodes'], key, DONE)
-    return today, in_flight
+    return today, in_flight, per_person
 
 
-def poll(cfg, lin, gh, issues, fire_url, fire_token, firing, run_url, now):
+def poll(cfg, lin, gh, issues, designers, tokens, firing, run_url, now):
     used = None
     for issue in lin.queue(cfg):
         ticket = issue['identifier']
@@ -466,11 +521,23 @@ def poll(cfg, lin, gh, issues, fire_url, fire_token, firing, run_url, now):
         if not firing and not gh.dry:
             print(f'poll: {key} is waiting; firing is off (repo variable DESIGN_BRIDGE_FIRING is not "on")')
             continue
-        ok, why = requester_ok(issue)
+        ok, why = requester_ok(issue, cfg)
         if not ok:
-            lin.comment(issue, compose_not_started(issue, key, why, 'Ask a full workspace member to create the ticket.'), cfg)
+            lin.comment(issue, compose_not_started(issue, key, why, 'Ask a full workspace member to add the label.'), cfg)
             print(f'poll: {key} not started ({why})')
             continue
+        routine = routine_for(issue, cfg, designers)
+        waited = [iso_epoch(c.get('createdAt')) for c in issue['comments']['nodes']
+                  if marker(key, 'needs-setup') in (c.get('body') or '')]
+        if routine and waited and now - min(waited) > SETUP_DAYS * 86400:
+            print(f'poll: {key} waited for setup more than {SETUP_DAYS} days; edit the brief to run it')
+            continue
+        if not routine:
+            if not has_marker(issue['comments']['nodes'], key, ['needs-setup']):
+                lin.comment(issue, compose_needs_setup(issue, key, cfg), cfg)
+            print(f'poll: {key} waits: {(requester(issue, cfg) or {}).get("name")} has no routine in designers.json')
+            continue
+        email = requester(issue, cfg)['email'].strip().lower()
         used = used or list(usage(cfg, gh, issues, now))
         if used[1] >= cfg['max_in_flight']:
             print(f'poll: {key} waits: {used[1]} runs in flight (max {cfg["max_in_flight"]})')
@@ -481,16 +548,29 @@ def poll(cfg, lin, gh, issues, fire_url, fire_token, firing, run_url, now):
                 'To retry later, edit the brief (title or description).'), cfg)
             print(f'poll: {key} not started (daily limit)')
             continue
-        if not gh.create_tag(CLAIM + key, {'ticket': ticket, 'claimed_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}):
+        if used[2].get(email, 0) >= cfg['max_fires_per_person_per_day']:
+            lin.comment(issue, compose_not_started(
+                issue, key, f'{routine["name"]} has used today\'s {cfg["max_fires_per_person_per_day"]} design runs',
+                'To retry tomorrow, edit the brief (title or description).'), cfg)
+            print(f'poll: {key} not started (personal daily limit)')
+            continue
+        token = tokens.get(routine['token_secret'], '').strip()
+        if not token and not gh.dry:
+            print(f'poll: {key} waits: secret {routine["token_secret"]} for {routine["name"]} is not set')
+            continue
+        if not gh.create_tag(CLAIM + key, {'ticket': ticket, 'requester': email,
+                                           'claimed_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}):
             print(f'poll: {key} was claimed by another tick')
             continue
         used[0] += 1
         used[1] += 1
+        used[2][email] = used[2].get(email, 0) + 1
         if gh.dry:
-            print(f'[dry-run] would fire the routine for {key} with {len(fire_text(issue, key))} chars of brief')
+            print(f'[dry-run] would fire {routine["name"]}\'s routine for {key} with '
+                  f'{len(fire_text(issue, key, cfg))} chars of brief')
             continue
         try:
-            fired = fire(fire_url, fire_token, fire_text(issue, key))
+            fired = fire(routine['fire_url'], token, fire_text(issue, key, cfg))
         except BridgeError as e:
             print(f'poll: {key} fire failed: {e}')
             lin.comment(issue, compose_fire_failed(issue, key, cfg, str(e)), cfg)
@@ -506,21 +586,25 @@ def main(argv):
         return 2
     dry = '--dry-run' in argv
     cfg = load_config()
+    designers = load_designers()
     env = os.environ
     firing = env.get('DESIGN_BRIDGE_FIRING', '').strip() == 'on'
-    for k in ('LINEAR_API_KEY', 'GH_TOKEN', 'GITHUB_REPOSITORY') + (('ROUTINE_FIRE_URL', 'ROUTINE_FIRE_TOKEN') if firing and not dry else ()):
+    for k in ('LINEAR_API_KEY', 'GH_TOKEN', 'GITHUB_REPOSITORY'):
         if not env.get(k, '').strip():
             raise BridgeError(f'{k} is not set')
+    secrets = json.loads(env.get('ROUTINE_TOKENS') or '{}')
+    tokens = {d['token_secret']: secrets.get(d['token_secret'], '') for d in designers.values()}
+    del secrets
     lin = Linear(env['LINEAR_API_KEY'].strip(), dry)
     gh = GitHub(env['GH_TOKEN'].strip(), env['GITHUB_REPOSITORY'], dry)
     issues = Issues(lin)
     run_url = (f'{env["GITHUB_SERVER_URL"]}/{env["GITHUB_REPOSITORY"]}/actions/runs/{env["GITHUB_RUN_ID"]}'
                if env.get('GITHUB_SERVER_URL') and env.get('GITHUB_RUN_ID') else None)
-    print(f'firing is {"on" if firing else "off"}')
+    print(f'firing is {"on" if firing else "off"}; {len(designers)} designers, '
+          f'{sum(1 for t in tokens.values() if t.strip())} with a token')
     failed = False
     for step in (lambda: collect(cfg, lin, gh, issues), lambda: sweep(cfg, lin, gh, issues, time.time()),
-                 lambda: poll(cfg, lin, gh, issues, env.get('ROUTINE_FIRE_URL'), env.get('ROUTINE_FIRE_TOKEN'),
-                              firing, run_url, time.time())):
+                 lambda: poll(cfg, lin, gh, issues, designers, tokens, firing, run_url, time.time())):
         try:
             step()
         except BridgeError as e:  # one failing step never stops the others

@@ -22,9 +22,16 @@ AI_DESIGN = {'id': '56a3977a-dd58-4cec-a0aa-9522df1f27fb', 'name': 'ai-design'}
 T = 'WAND-9001'
 OTHER = 'WAND-9002'  # another team's ticket
 PRODUCT = '3b01e73d-6636-4ff9-9f8a-c758f4d806ef'
-MEMBER = {'id': 'u2', 'name': 'A PM', 'url': None, 'guest': False, 'active': True}
+MEMBER = {'id': 'u2', 'name': 'A PM', 'email': 'PM@wemod.com', 'url': None, 'guest': False, 'active': True}
+DESIGNER = {'id': 'u3', 'name': 'A Designer', 'email': 'designer@wemod.com', 'url': 'https://linear.app/wemod/profiles/d',
+            'guest': False, 'active': True}
 RUN_URL = 'https://github.com/owner/repo/actions/runs/77'
 FIRE_URL = 'https://api.anthropic.com/v1/claude_code/routines/trig_01TestTestTest/fire'
+FIRE_URL_D = 'https://api.anthropic.com/v1/claude_code/routines/trig_01DesignerDesigner/fire'
+DESIGNERS = {'pm@wemod.com': {'name': 'A PM', 'fire_url': FIRE_URL, 'token_secret': 'ROUTINE_TOKEN_PM'},
+             'designer@wemod.com': {'name': 'A Designer', 'fire_url': FIRE_URL_D, 'token_secret': 'ROUTINE_TOKEN_D'}}
+TOKENS = {'ROUTINE_TOKEN_PM': 'sk-ant-oat01-test', 'ROUTINE_TOKEN_D': 'sk-ant-oat01-d'}
+NOW_ISO = lambda: time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
 CANVAS = 'https://claude.ai/artifact/AbCdEfGhIjKlMnOp'
 BRIEF = '# WeMod - RDR2 Unlimited Health\nDesign a full page for players searching for the mod. ' * 3
 
@@ -64,6 +71,7 @@ class World:
         self.tags = {}          # sha -> {'message', 'date'}
         self.branches = {}      # branch -> {'files': [...], 'ahead': n, 'doc': {...}}
         self.fires = []
+        self.fired_urls = []
         self.fire_status = 200
         self.race = False       # the next ref create returns 422
 
@@ -78,7 +86,8 @@ class World:
             if 'commentCreate' in q:
                 ident = next(k for k, i in self.issues.items() if i['id'] == v['issueId'])
                 self.comments.append((ident, v['body']))
-                self.issues[ident]['comments']['nodes'].append({'id': 'c', 'body': v['body'], 'user': {'id': CLAUDE}})
+                self.issues[ident]['comments']['nodes'].append({'id': 'c', 'body': v['body'], 'createdAt': NOW_ISO(),
+                                                                'user': {'id': CLAUDE}})
                 return 200, {'data': {'commentCreate': {'success': True, 'comment': {'id': 'c', 'url': 'https://linear.app/c'}}}}
             if 'DesignBridgeQueue' in q:
                 return 200, {'data': {'issues': {'nodes': [copy.deepcopy(i) for i in self.issues.values()
@@ -86,8 +95,9 @@ class World:
                     and i['state']['type'] not in ('completed', 'canceled')]}}}
             self.read.append(v['id'])
             return 200, {'data': {'issue': copy.deepcopy(self.issues.get(v['id']))}}
-        if url == FIRE_URL:
+        if url in (FIRE_URL, FIRE_URL_D):
             self.fires.append(body['text'])
+            self.fired_urls.append((url, headers['Authorization']))
             if self.fire_status != 200:
                 return self.fire_status, {'type': 'error', 'error': {'type': 'rate_limit_error'}}
             return 200, {'type': 'routine_fire', 'claude_code_session_id': f'cse_{len(self.fires)}',
@@ -130,13 +140,13 @@ class World:
             t['date'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(then))
 
 
-def tick(w, c, dry=False, firing=True):
+def tick(w, c, dry=False, firing=True, designers=DESIGNERS, tokens=TOKENS):
     bridge.http = w.http
     lin = bridge.Linear('lin_api_test', dry)
     gh = bridge.GitHub('ghs_test', 'owner/repo', dry)
     issues = bridge.Issues(lin)
     for step in (lambda: bridge.collect(c, lin, gh, issues), lambda: bridge.sweep(c, lin, gh, issues, time.time()),
-                 lambda: bridge.poll(c, lin, gh, issues, FIRE_URL, 'sk-ant-oat01-test', firing, RUN_URL, time.time())):
+                 lambda: bridge.poll(c, lin, gh, issues, designers, tokens, firing, RUN_URL, time.time())):
         try:
             step()
         except bridge.BridgeError as e:  # as in bridge.main: one failing step never stops the others
@@ -169,10 +179,10 @@ i = w.issues[T]
 check('eligible with the ai-design label', bridge.eligible(i, c) == (True, ''))
 check('not eligible in another team', not bridge.eligible(w.issues[OTHER], c)[0])
 check('not eligible on ignore_tickets', not bridge.eligible({**i, 'identifier': 'WAND-8583'}, c)[0])
-check('a full member may request', bridge.requester_ok(i) == (True, ''))
-check('a guest may not request', not bridge.requester_ok({**i, 'creator': {**MEMBER, 'guest': True}})[0])
-check('a deactivated user may not request', not bridge.requester_ok({**i, 'creator': {**MEMBER, 'active': False}})[0])
-check('an integration-created ticket may not request', not bridge.requester_ok({**i, 'creator': None})[0])
+check('a full member may request', bridge.requester_ok(i, c) == (True, ''))
+check('a guest may not request', not bridge.requester_ok({**i, 'creator': {**MEMBER, 'guest': True}}, c)[0])
+check('a deactivated user may not request', not bridge.requester_ok({**i, 'creator': {**MEMBER, 'active': False}}, c)[0])
+check('an integration-created ticket may not request', not bridge.requester_ok({**i, 'creator': None}, c)[0])
 check('session link opens the session page', bridge.session_link('https://claude.ai/code/cse_01AB') == 'https://claude.ai/code/session_01AB')
 check('not eligible without labels', not bridge.eligible({**i, 'labels': {'nodes': []}}, c)[0])
 check('not eligible with a same-named label from another team', not bridge.eligible({**i, 'labels': {'nodes': [{'id': 'other', 'name': 'ai-design'}]}}, c)[0])
@@ -182,8 +192,8 @@ check('not eligible when closed', not bridge.eligible({**i, 'state': {'type': 'c
 check('not eligible without a brief', not bridge.eligible({**i, 'description': 'tbd'}, c)[0])
 check('fingerprint is stable', bridge.fingerprint('a', 'b') == bridge.fingerprint('a', 'b'))
 check('fingerprint follows the brief', bridge.fingerprint('a', 'b') != bridge.fingerprint('a', 'c'))
-check('fire text carries ticket and run key', f'run_key: {key_for(w)}' in bridge.fire_text(i, key_for(w)))
-check('fire text bounded', len(bridge.fire_text({**i, 'description': 'x' * 100000}, 'k')) <= 60000)
+check('fire text carries ticket and run key', f'run_key: {key_for(w)}' in bridge.fire_text(i, key_for(w), c))
+check('fire text bounded', len(bridge.fire_text({**i, 'description': 'x' * 100000}, 'k', c)) <= 60000)
 
 # --- poll: one fire per brief version ---
 w = World()
@@ -260,6 +270,81 @@ check('in-flight limit: the next brief waits silently', len(w.fires) == 1 and w.
 push_result(w, k1, ready_doc(k1))
 tick(w, cfg(max_in_flight=1))
 check('in-flight limit: it fires once the first run reports', len(w.fires) == 2)
+
+# --- one routine per teammate: the requester's own routine, needs-setup, personal limit ---
+def label_added_by(w, who, at=None):
+    w.issues[T]['history'] = {'nodes': [{'createdAt': at or NOW_ISO(), 'addedLabelIds': [AI_DESIGN['id']], 'actor': dict(who)}]}
+
+
+real = bridge.load_designers()
+check('designers.json loads and names Shanshan', real.get('shanshan@wemod.com', {}).get('token_secret') == 'ROUTINE_FIRE_TOKEN')
+w = World()
+tick(w, c)
+check("the creator's routine fires with the creator's token", w.fired_urls == [(FIRE_URL, 'Bearer sk-ant-oat01-test')])
+check('requested_by names the creator', 'requested_by: A PM' in w.fires[0])
+claim = w.tags[w.refs[f'refs/tags/design-claim/{key_for(w)}']]['message']
+check('the claim records the requester', json.loads(claim).get('requester') == 'pm@wemod.com')
+
+w = World()
+w.issues[T]['history'] = {'nodes': [
+    {'createdAt': '2026-11-01T10:00:00.000Z', 'addedLabelIds': [AI_DESIGN['id']], 'actor': dict(MEMBER)},
+    {'createdAt': '2026-11-02T10:00:00.000Z', 'addedLabelIds': ['other-label'], 'actor': dict(MEMBER)},
+    {'createdAt': '2026-11-05T10:00:00.000Z', 'addedLabelIds': [AI_DESIGN['id']], 'actor': dict(DESIGNER)}]}
+tick(w, c)
+check("whoever last added the label gets the run, in their own routine", w.fired_urls == [(FIRE_URL_D, 'Bearer sk-ant-oat01-d')])
+check('requested_by names the label adder', 'requested_by: A Designer' in w.fires[0])
+k = key_for(w)
+push_result(w, k, ready_doc(k))
+tick(w, c)
+check('the label adder is mentioned for review', bool(w.out) and 'https://linear.app/wemod/profiles/d ready for your review' in w.out[0][1])
+
+w = World()
+label_added_by(w, {**DESIGNER, 'email': 'new@wemod.com', 'name': 'New Person'})
+tick(w, c)
+tick(w, c)
+check('no routine yet: one needs-setup comment, no fire, no claim',
+      w.fires == [] and w.refs == {} and len(w.comments) == 1 and '· needs-setup' in w.comments[0][1]
+      and 'New Person' in w.comments[0][1])
+tick(w, c, designers={**DESIGNERS, 'new@wemod.com': {'name': 'New Person', 'fire_url': FIRE_URL_D, 'token_secret': 'ROUTINE_TOKEN_D'}})
+check('once they are added, the waiting ticket fires by itself', len(w.fires) == 1 and len(w.out) == 1)
+
+w = World()
+label_added_by(w, {**DESIGNER, 'email': 'new@wemod.com'})
+tick(w, c)
+w.issues[T]['comments']['nodes'][0]['createdAt'] = '2026-01-01T00:00:00.000Z'
+tick(w, c, designers={**DESIGNERS, 'new@wemod.com': {'name': 'N', 'fire_url': FIRE_URL_D, 'token_secret': 'ROUTINE_TOKEN_D'}})
+check('a needs-setup ticket older than the wait is not fired', w.fires == [])
+
+w = World()
+tick(w, c, firing=False, designers={})
+check('firing off: no needs-setup comment either', w.comments == [])
+
+w = World()
+tick(w, c, tokens={})
+check('routine listed but its secret unset: waits, no claim, no comment', w.fires == [] and w.refs == {} and w.comments == [])
+
+w = World()
+tick(w, c)
+w.issues[T]['description'] += '\nAlso: mobile first.'
+tick(w, cfg(max_fires_per_person_per_day=1))
+check('personal daily limit: one not-started comment, no second fire', len(w.fires) == 1 and len(w.out) == 1
+      and '· not-started' in w.out[0][1] and "today's 1 design runs" in w.out[0][1])
+w.issues['WAND-9003'] = {**copy.deepcopy(w.issues[T]), 'id': 'uuid-9003', 'identifier': 'WAND-9003', 'comments': {'nodes': []}}
+label_added_by(w, DESIGNER)
+w.issues['WAND-9003']['history'] = w.issues[T]['history']
+tick(w, cfg(max_fires_per_person_per_day=1))
+check("someone else's limit is separate", len(w.fires) == 2 and w.fired_urls[-1][0] == FIRE_URL_D)
+
+for bad in [{'fire_url': 'https://evil.example/fire', 'token_secret': 'ROUTINE_X'},
+            {'fire_url': FIRE_URL, 'token_secret': 'LINEAR_API_KEY'}]:
+    with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
+        json.dump({'designers': {'x@wemod.com': {'name': 'X', **bad}}}, f)
+    try:
+        bridge.load_designers(f.name)
+        check(f'designers.json refuses {bad}', False)
+    except bridge.BridgeError:
+        check(f'designers.json refuses {bad}', True)
+    os.remove(f.name)
 
 # --- collect: one comment per result ---
 w = World()

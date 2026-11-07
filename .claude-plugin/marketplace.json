@@ -1,0 +1,14 @@
+{
+  "name": "wemod-design",
+  "description": "Wand design tools: set up your own WeMod design routine for Linear ai-design tickets.",
+  "owner": {
+    "name": "Shanshan (Wand Video pod)"
+  },
+  "plugins": [
+    {
+      "name": "wemod-design-routine",
+      "source": "./plugins/wemod-design-routine",
+      "description": "One-time setup of your own WeMod design routine: Product tickets you label ai-design get a Claude Design canvas in your own Claude account."
+    }
+  ]
+}

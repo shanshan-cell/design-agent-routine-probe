@@ -98,7 +98,7 @@ check('fingerprint of an empty description matches the bridge', await fingerprin
 const BRIEF = 'Design a game discovery page for players looking for mods. '.repeat(2);
 const fp = await fingerprint('Discovery', BRIEF);
 const ticket = (id, comments = [], over = {}) => ({ identifier: id, title: 'Discovery', description: BRIEF,
-  comments: { nodes: comments.map((body) => ({ body })) }, ...over });
+  comments: { nodes: comments.map((c) => (typeof c === 'string' ? { body: c } : c)) }, ...over });
 let sv = await survey([ticket('WAND-1')]);
 check('new brief: waiting', sv.waiting.join() === 'WAND-1' && sv.inFlight.length === 0);
 sv = await survey([ticket('WAND-1', [`_design-run:WAND-1-${fp} · started_`])]);
@@ -113,6 +113,16 @@ sv = await survey([ticket('WAND-1', [], { description: 'tbd' })]);
 check('no brief: not waiting', sv.waiting.length === 0);
 sv = await survey([ticket('WAND-8583')], ['WAND-8583']);
 check('ignored ticket: not waiting', sv.waiting.length === 0);
+
+const NOWMS = Date.UTC(2026, 10, 4, 15, 20);
+const ago = (days) => new Date(NOWMS - days * 86400000).toISOString();
+sv = await survey([ticket('WAND-1', [{ body: `_design-run:WAND-1-${fp} · needs-setup_`, createdAt: ago(1) }])], [], NOWMS);
+check('needs-setup (recent): not waiting, waits for setup', sv.waiting.length === 0 && sv.setup.join() === 'WAND-1');
+sv = await survey([ticket('WAND-1', [{ body: `_design-run:WAND-1-${fp} · needs-setup_`, createdAt: ago(8) }])], [], NOWMS);
+check('needs-setup older than 7 days: dropped', sv.waiting.length === 0 && sv.setup.length === 0);
+sv = await survey([ticket('WAND-1', [{ body: `_design-run:WAND-1-${fp} · needs-setup_`, createdAt: ago(1) },
+  { body: `_design-run:WAND-1-${fp} · started_`, createdAt: ago(0) }])], [], NOWMS);
+check('needs-setup then started: in flight, not waiting for setup', sv.setup.length === 0 && sv.inFlight.length === 1);
 
 function world(issues, dispatchStatus = 204) {
   const calls = [];
@@ -136,6 +146,11 @@ await scheduled(AT(20), env, f);
 check('cron: run in flight, not the hourly slot: no tick', f.dispatches().length === 0);
 await scheduled(AT(16), env, f);
 check('cron: run in flight at :16: one tick', f.dispatches().length === 1);
+f = world([ticket('WAND-1', [{ body: `_design-run:WAND-1-${fp} · needs-setup_`, createdAt: new Date(AT(0)).toISOString() }])]);
+await scheduled(AT(20), env, f);
+check('cron: waiting for setup, not the hourly slot: no tick', f.dispatches().length === 0);
+await scheduled(AT(16), env, f);
+check('cron: waiting for setup at :16: one tick', f.dispatches().length === 1);
 f = world([]);
 await scheduled(AT(16), env, f);
 check('cron: nothing labeled: no tick, even hourly', f.dispatches().length === 0);

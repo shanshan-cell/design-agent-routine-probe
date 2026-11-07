@@ -5,7 +5,8 @@
 //
 //   cron */2      Cloudflare Cron Trigger. Reads Linear (read-only key) and starts a tick when an open Product ticket
 //                 with ai-design has a brief version the bridge hasn't answered yet; once an hour (:16) also while a
-//                 run is in flight, so results and timeouts are picked up even without a webhook.
+//                 run is in flight (results and timeouts without a webhook) or a ticket waits for its requester's
+//                 routine to be set up (needs-setup, for 7 days).
 //   POST /linear  Linear webhook (Issue events, Product team). Starts a tick when ai-design is newly on an issue.
 //   POST /github  GitHub repository webhook (push). Starts a tick when the routine pushes claude/design-result-*.
 //
@@ -55,10 +56,11 @@ export function resultPushed(event, headers) {
 // The bridge's comment markers: design-run:<ticket>-<fingerprint> · <kind>. Kinds after which a run is over:
 const MARKER = /design-run:([A-Z][A-Z0-9]{1,9}-[0-9]{1,6}-[0-9a-f]{16}) · ([a-z-]+)/g;
 const DONE = new Set(['result', 'timeout', 'fire-failed', 'not-started']);
+const SETUP_WAIT_MS = 7 * 24 * 3600 * 1000; // same as bridge.SETUP_DAYS
 const QUEUE = `query RelayQueue($team: ID!, $label: ID!) {
   issues(first: 25, filter: { team: { id: { eq: $team } }, labels: { id: { eq: $label } },
                               state: { type: { nin: ["completed", "canceled"] } } }) {
-    nodes { identifier title description comments(first: 100, filter: { body: { contains: "design-run:" } }) { nodes { body } } }
+    nodes { identifier title description comments(first: 100, filter: { body: { contains: "design-run:" } }) { nodes { body createdAt } } }
   }
 }`;
 
@@ -68,21 +70,28 @@ export async function fingerprint(title, description) {
   return [...d].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
-/** { waiting: tickets whose current brief has no marker yet, inFlight: run keys started and not over }. */
-export async function survey(issues, ignore = []) {
-  const waiting = [], inFlight = [];
+/** { waiting: tickets whose current brief has no marker yet, inFlight: run keys started and not over,
+ *    setup: tickets whose current brief waits (under 7 days) for the requester's routine }. */
+export async function survey(issues, ignore = [], now = Date.now()) {
+  const waiting = [], inFlight = [], setup = [];
   for (const issue of issues) {
     const kinds = new Map();
+    const asked = new Map(); // run key -> when its needs-setup comment was posted
     for (const c of issue.comments?.nodes ?? []) {
-      for (const [, key, kind] of (c.body ?? '').matchAll(MARKER)) kinds.set(key, (kinds.get(key) ?? new Set()).add(kind));
+      for (const [, key, kind] of (c.body ?? '').matchAll(MARKER)) {
+        kinds.set(key, (kinds.get(key) ?? new Set()).add(kind));
+        if (kind === 'needs-setup') asked.set(key, Date.parse(c.createdAt ?? '') || 0);
+      }
     }
     for (const [key, k] of kinds) if (k.has('started') && ![...k].some((x) => DONE.has(x))) inFlight.push(key);
     const key = `${issue.identifier}-${await fingerprint(issue.title, issue.description)}`;
-    if (!ignore.includes(issue.identifier) && (issue.description ?? '').trim().length >= 40 && !kinds.has(key)) {
-      waiting.push(issue.identifier);
+    if (ignore.includes(issue.identifier) || (issue.description ?? '').trim().length < 40) continue;
+    if (!kinds.has(key)) waiting.push(issue.identifier);
+    else if ([...kinds.get(key)].every((x) => x === 'needs-setup') && now - asked.get(key) < SETUP_WAIT_MS) {
+      setup.push(issue.identifier);
     }
   }
-  return { waiting, inFlight };
+  return { waiting, inFlight, setup };
 }
 
 async function linearQueue(env, fetchImpl) {
@@ -149,11 +158,15 @@ export async function scheduled(scheduledTime, env, fetchImpl = fetch) {
   if (env.RELAY_ENABLED !== 'on') return log('relay is off (RELAY_ENABLED)');
   if (!env.LINEAR_READ_KEY) return log('LINEAR_READ_KEY is not set');
   const ignore = (env.IGNORE_TICKETS ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-  const { waiting, inFlight } = await survey(await linearQueue(env, fetchImpl), ignore);
+  const { waiting, inFlight, setup } = await survey(await linearQueue(env, fetchImpl), ignore, scheduledTime);
   const hourly = new Date(scheduledTime).getUTCMinutes() === 16;
   const why = waiting.length ? `new brief: ${waiting.join(', ')}`
-    : hourly && inFlight.length ? `hourly check, in flight: ${inFlight.join(', ')}` : null;
-  if (!why) return log(`nothing to do (in flight: ${inFlight.join(', ') || 'none'})`);
+    : hourly && (inFlight.length || setup.length)
+      ? `hourly check, in flight: ${inFlight.join(', ') || 'none'}, waiting for setup: ${setup.join(', ') || 'none'}`
+      : null;
+  if (!why) {
+    return log(`nothing to do (in flight: ${inFlight.join(', ') || 'none'}; waiting for setup: ${setup.join(', ') || 'none'})`);
+  }
   if (!(await dispatch(env, why, fetchImpl))) throw new Error(`dispatch failed (${why})`);
   return log(`tick started (${why})`);
 }
